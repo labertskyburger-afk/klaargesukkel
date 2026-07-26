@@ -1,0 +1,104 @@
+# Deploying Klaargesukkel
+
+One repo on GitHub, one Vercel project per app, one subdomain per project. Here's the hub
+(klaargesukkel.com) end to end — repeat the Vercel + DNS steps for each future product.
+
+## 1. Push to GitHub
+
+```
+cd klaargesukkel        # this folder
+git init
+git add .
+git commit -m "Hub landing page"
+git branch -M main
+git remote add origin https://github.com/<your-username>/klaargesukkel.git
+git push -u origin main
+```
+
+(Create the empty repo on GitHub first — github.com/new — don't initialize it with a README
+so the push above doesn't conflict.)
+
+## 2. Import into Vercel
+
+1. vercel.com → **Add New** → **Project** → import the `klaargesukkel` repo.
+2. **Root Directory**: set to `apps/hub` (important — this repo will hold multiple apps).
+3. Framework preset: Next.js (auto-detected). Leave build/output settings default.
+4. Deploy. You'll get a `*.vercel.app` URL to confirm it's working before touching DNS.
+
+## 3. Point klaargesukkel.com at Vercel
+
+In the Vercel project → **Settings → Domains** → add `klaargesukkel.com` and `www.klaargesukkel.com`.
+Vercel will show you the exact DNS records it needs — normally:
+
+| Type  | Name | Value                  |
+|-------|------|-------------------------|
+| A     | @    | `76.76.21.21`           |
+| CNAME | www  | `cname.vercel-dns.com`  |
+
+In GoDaddy: **My Products → DNS** for klaargesukkel.com → edit/add those records to match
+exactly what Vercel showed you (Vercel's values are authoritative if they differ from the
+table above — they do change occasionally). DNS can take a few minutes to a few hours to
+propagate.
+
+## 4. Repeat for klaargesukkel.co.za
+
+Same domain, same Vercel project — add `klaargesukkel.co.za` as an additional domain on the
+**same** hub project (or redirect it to `.com`, your call), then add the matching A/CNAME
+records under that domain's DNS in GoDaddy.
+
+## 5. Adding the next product (e.g. a WhatsApp bot)
+
+1. Add code under `apps/<name>` in the same repo, push.
+2. Vercel → **Add New Project** → same repo again → **Root Directory**: `apps/<name>`.
+3. **Settings → Domains** → add `<name>.klaargesukkel.com`.
+4. GoDaddy DNS → add a CNAME: `<name>` → `cname.vercel-dns.com`.
+5. Update the `products` array in `apps/hub/app/page.tsx` to link to it and flip its status.
+
+## 5b. Deploying `apps/dinner` specifically
+
+It's static HTML/CSS/JS with no build step, so the Vercel import differs slightly from the
+hub:
+
+1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/dinner`.
+2. **Framework Preset**: `Other`. **Build Command**: none/empty. **Output Directory**: `./`.
+3. Deploy, confirm the `*.vercel.app` URL works, then add `dinner.klaargesukkel.com` under
+   **Settings → Domains** and the matching CNAME in GoDaddy (same pattern as step 3 above).
+
+Heads up: this file uses `localStorage` for the freezer tracker, shopping checks, and batch
+date — that data lives per-browser/per-device, it doesn't sync across devices or to a
+database. Fine for personal use; worth knowing if this becomes a product other people use.
+
+## 5c. Deploying `apps/admin`
+
+Same as the hub (Next.js, standard build), with two extra steps:
+
+1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/admin`.
+2. **Settings → Environment Variables** → add `ADMIN_USER` and `ADMIN_PASSWORD` (pick
+   anything, just don't reuse a password from elsewhere). Without both set, the app rejects
+   every request — it fails closed, not open.
+3. Deploy, confirm the basic-auth prompt appears on the `*.vercel.app` URL, then add
+   `admin.klaargesukkel.com` under **Settings → Domains** + matching GoDaddy CNAME.
+4. Don't link to this subdomain from the public hub — it's meant to stay unlisted.
+
+## Cockpit (not part of this repo)
+
+Cockpit is a separate client project you're still building in Claude Code — Next.js, Prisma,
+Neon, Auth.js, already deployed on its own Vercel project at `cockpit-omega-blush.vercel.app`.
+It's intentionally **not** part of this monorepo: different repo, different owner workflow
+(Claude Code, not this Cowork session), and moving a live client app risks disrupting both.
+The hub just links out to it as a portfolio piece. If you ever want it properly under
+`cockpit.klaargesukkel.com`, that's a domain swap in its own Vercel project whenever you're
+ready — no code migration needed.
+
+## Notes
+
+- Every product gets its **own** Vercel project even though they share a repo — that's what
+  makes a bug in one app harmless to the others sitting on other subdomains.
+- Services that aren't a Next.js frontend (e.g. a WhatsApp bot backend using the WhatsApp
+  Business API, which needs a persistent webhook) may fit better on Railway or a small VPS
+  instead of Vercel's serverless model — flag it when we build that one and we'll pick the
+  right host for it specifically.
+- I couldn't run `npm install`/`npm run build` from this session (no package registry access
+  in this sandbox), so do a first local build once you've pulled the repo:
+  `cd apps/hub && npm install && npm run build`. Vercel will also build it fresh on deploy,
+  which is the real test.

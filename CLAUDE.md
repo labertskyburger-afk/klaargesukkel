@@ -1,0 +1,94 @@
+# Klaargesukkel — instructions for Claude Code
+
+Read this first. Then read `ARCHITECTURE.md`, `BRAND.md`, and `DEPLOYMENT.md` in this same
+folder before doing anything — they're the real source of truth, this file just orients you
+and lists what's outstanding.
+
+## What this is
+
+Albert's business: small, sharp digital solutions for everyday hassles, hosted under
+`klaargesukkel.com` / `klaargesukkel.co.za` (both owned on GoDaddy). This repo is the
+**marketing hub + owned products + internal ops** — see ARCHITECTURE.md for the full 4-layer
+picture (hub / owned products / client-delivered engines / ops). Client-delivered engines
+(Cockpit, a future WhatsApp bot) are deliberately **separate repos**, not in here — Cockpit
+already exists at `github.com/labertskyburger-afk/cockpit` and you may already be working on
+it in another session.
+
+## How this repo and the Cowork side split the work
+
+Albert also works on this business in Claude's Cowork mode (Claude Desktop) — that's where
+architecture decisions, brand direction, and content get worked out, because it has better
+research/planning tools and no reason to touch git or npm. This repo's `.md` files
+(ARCHITECTURE.md, BRAND.md, DEPLOYMENT.md, README.md, this file) are the handoff surface
+between the two: Cowork writes decisions into them, you read them fresh each session rather
+than trusting memory of a past one. If you make a structural decision here (new app, new
+convention, new engine), update the relevant doc so the Cowork side stays accurate too — it
+doesn't read git history, only these files.
+
+**Your side of the line:** git, GitHub, npm/build/test, Vercel deploys, DNS-adjacent config,
+actual product code for `apps/*`, and (in its own repo/session) Cockpit and any future
+client-delivered engine.
+
+**Not your side of the line:** brand/positioning changes, new business-architecture decisions
+(multi-tenant vs. per-client, what a new product should even do) — flag these back to Albert
+rather than deciding unilaterally, since the Cowork side is where that gets worked through.
+
+## Current state (as of 2026-07-26)
+
+Nothing has been pushed to GitHub or deployed to Vercel yet. Everything below exists locally
+in this folder only.
+
+```
+apps/
+  hub/     — Next.js 14 (App Router) + Tailwind. Landing page, product cards. Builds fine
+             locally (Albert confirmed npm install/build/dev all work on his machine).
+  dinner/  — plain static HTML/CSS/JS, no framework, no build step. A real weeknight dinner
+             planner (freezer tracker, batch-cook scheduler, shopping lists). Uses
+             localStorage — per-device only, no backend.
+  admin/   — Next.js 14 + Tailwind. Private client tracker, gated by Basic Auth middleware
+             (middleware.ts) reading ADMIN_USER/ADMIN_PASSWORD env vars — fails closed if
+             unset. Data source is apps/admin/data/clients.json (hand-edited, no DB yet).
+```
+
+## Immediate to-do
+
+1. **Git + GitHub.** `git init` at the repo root if not already, commit everything, create a
+   GitHub repo (Albert will need to do the actual github.com/new step or grant you access —
+   confirm with him rather than assuming), push. Exact commands in DEPLOYMENT.md §1.
+2. **Deploy `apps/hub` to Vercel.** Root Directory `apps/hub`, Next.js preset auto-detected.
+   DEPLOYMENT.md §2.
+3. **Point klaargesukkel.com + klaargesukkel.co.za at it via GoDaddy DNS.** DEPLOYMENT.md §3–4.
+   Vercel's domain settings show the exact A/CNAME values to use — don't hardcode old ones.
+4. **Deploy `apps/dinner`.** Different Vercel settings than the other apps — Framework Preset
+   **Other**, no build command, output directory `./`. DEPLOYMENT.md §5b. Subdomain
+   `dinner.klaargesukkel.com`.
+5. **Deploy `apps/admin`.** Set `ADMIN_USER`/`ADMIN_PASSWORD` in that Vercel project's env
+   vars before/at deploy — otherwise every request 401s (which is correct, just don't be
+   surprised). Subdomain `admin.klaargesukkel.com`, and don't link it from the public hub.
+   DEPLOYMENT.md §5c.
+6. **Sanity check the hub's Cockpit card** still points at
+   `https://cockpit-omega-blush.vercel.app/` (or wherever Cockpit currently lives — confirm
+   with Albert if it's moved).
+
+## Known gotchas from building this so far
+
+- `apps/hub/app/page.tsx`'s `products` array needs an explicit `Product` type with
+  `href?: string` — without it, TypeScript's strict mode chokes on accessing `.href` across a
+  union of object literals with/without that field. Already fixed, just don't regress it if
+  you refactor.
+- No sandbox that built this had npm registry access, so builds were never verified with a
+  real `npm install && npm run build` from that side — Albert's own machine did confirm the
+  hub builds fine, but double-check `apps/admin` the same way since it hasn't been build
+  tested anywhere yet.
+- Don't commit `node_modules` or `.next` — both gitignored per-app already, keep it that way.
+
+## Conventions going forward
+
+- New owned product → `apps/<name>` in this repo, own Vercel project (Root Directory
+  `apps/<name>`), own `<name>.klaargesukkel.com` subdomain, add a card to
+  `apps/hub/app/page.tsx`.
+- New client-delivered engine (bot, platform) → its own repo, multi-tenant from day one
+  (tenant resolved by hostname for web, `phone_number_id` for WhatsApp — see ARCHITECTURE.md
+  "How white-labeling actually works"), hub gets a portfolio card linking out, nothing more.
+- Every client that goes live anywhere → add a row to `apps/admin/data/clients.json` so the
+  ops view stays accurate.
