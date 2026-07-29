@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Klaargesukkel — Klaar met sukkel.",
+  title: "Klaargesukkel — Smart enough to keep it simple.",
   description:
-    "Small, sharp digital solutions for everyday hassles — for people, organizations, and businesses.",
+    "Smart enough to keep it simple. Small, sharp digital solutions for everyday hassles — for people, organizations, and businesses.",
   metadataBase: new URL("https://klaargesukkel.com"),
   openGraph: {
     title: "Klaargesukkel",
-    description: "Klaar met sukkel. Everyday problems, solved simply.",
+    description: "Klaar met sukkel. Smart enough to keep it simple.",
     url: "https://klaargesukkel.com",
     siteName: "Klaargesukkel",
     locale: "en_ZA",

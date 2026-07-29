@@ -57,6 +57,9 @@ export default function Home() {
         <h1 className="mt-4 text-4xl font-bold leading-tight text-ink sm:text-6xl">
           Klaar met sukkel.
         </h1>
+        <p className="mt-3 text-xl font-medium text-teal sm:text-2xl">
+          Smart enough to keep it simple.
+        </p>
         <p className="mt-6 max-w-2xl text-lg text-ink/70 sm:text-xl">
           We build small, sharp digital solutions for the everyday hassles people,
           organizations, and businesses run into — ordering systems, WhatsApp bots,

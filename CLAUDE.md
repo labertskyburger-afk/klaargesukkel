@@ -50,6 +50,24 @@ apps/
              unset. Data source is apps/admin/data/clients.json (hand-edited, no DB yet).
 ```
 
+## Pending from Cowork (added 2026-07-29)
+
+BRAND.md changed since you may have last read it: a new primary English catchline,
+**"Smart enough to keep it simple."**, was chosen to replace "No more sukkel. Just
+solutions." (see BRAND.md's Tagline options section for the full reasoning and backup
+options). "Klaar met sukkel." stays as the primary Afrikaans-facing tagline — this is an
+addition alongside it, not a replacement of the Afrikaans line.
+
+Action needed in `apps/hub`: work the new catchline into the hero (e.g. as a short subheading
+under the "Klaar met sukkel." H1 in `app/page.tsx`) and/or the meta description in
+`app/layout.tsx`. Exact placement/wording polish is your call — just don't drop the Afrikaans
+H1, and flag back to Albert if you think the tagline itself needs further wordsmithing rather
+than silently changing it again.
+
+A matching Gmail signature (`brand/email-signature.html`) already uses the new catchline —
+not part of this repo's deploy, just FYI so the two stay in sync if the wording ever changes
+again.
+
 ## Immediate to-do
 
 1. **Git + GitHub.** `git init` at the repo root if not already, commit everything, create a

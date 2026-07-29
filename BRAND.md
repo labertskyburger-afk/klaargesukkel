@@ -7,8 +7,13 @@ businesses — through small, sharp digital solutions.
 
 ## Tagline options
 - **Klaar met sukkel.** (primary, Afrikaans-market facing — .co.za)
-- **No more sukkel. Just solutions.** (English, .com)
-- Supporting line: *"Everyday problems. Solved simply."*
+- **Smart enough to keep it simple.** (primary English catchline — signatures, .com, anything
+  international. Chosen 2026-07-29 over "No more sukkel. Just solutions." because it actually
+  states the positioning — practical, smart, no unnecessary complexity — rather than just
+  restating the name.)
+- Other English options considered, kept as backups if the primary ever feels stale:
+  "Practical. Smart. Solved." / "Sharp fixes for everyday hassles." / "Real problems. Smart
+  solutions."
 
 ## Positioning
 Not a single product — a growing shelf of small, focused tools (ordering systems, WhatsApp
