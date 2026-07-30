@@ -60,7 +60,7 @@ function PriorityBadge({ priority }: { priority: Priority }) {
   );
 }
 
-export default function DashboardHome() {
+export default function ProjectsPage() {
   const list = (ideas as Idea[])
     .slice()
     .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
@@ -78,10 +78,7 @@ export default function DashboardHome() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-14">
-      <p className="text-sm font-medium uppercase tracking-widest text-teal">
-        Klaargesukkel
-      </p>
-      <h1 className="mt-2 text-3xl font-bold text-ink">Ideas &amp; projects</h1>
+      <h1 className="text-3xl font-bold text-ink">Ideas &amp; projects</h1>
       <p className="mt-2 text-ink/60">
         {list.length} tracked · every solution, product, and idea in one place so nothing
         gets missed.
@@ -193,9 +190,9 @@ export default function DashboardHome() {
       </div>
 
       <p className="mt-10 max-w-2xl text-xs text-ink/40">
-        This list is edited by hand in <code>apps/dashboard/data/ideas.json</code> and
-        redeployed — no database yet, same pattern as apps/admin. Once editing this file feels
-        slower than the problem deserves, that's the signal to move it to a real datastore.
+        This list is edited by hand in <code>apps/ops/data/ideas.json</code> and
+        redeployed — no database yet. Once editing this file feels slower than the problem
+        deserves, that's the signal to move it to a real datastore.
       </p>
     </main>
   );

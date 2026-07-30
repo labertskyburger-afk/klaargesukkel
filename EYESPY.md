@@ -6,8 +6,11 @@ Not a product for clients, not a public product at all — an **internal tool** 
 EyeSpy periodically reads what people in a given area are struggling with, asking for
 recommendations on, or trying and failing to find/buy, and turns that into a ranked digest
 Albert uses as input for what to build next on Klaargesukkel. It's the ideation engine behind
-the ideation engine. Lives in the klaargesukkel monorepo as `apps/eyespy` — same reasoning as
-`apps/admin`: internal, basic-auth gated, never linked from the public hub.
+the ideation engine. Lives in the klaargesukkel monorepo as a route inside `apps/ops`
+(`apps/ops/app/(app)/eyespy/`, replacing the current placeholder page) — same reasoning as
+`/clients` and `/projects` in that app: internal, behind the ops login, never linked from the
+public hub. (Was originally scoped as its own `apps/eyespy` app before the 2026-07-30 ops
+merge — see ARCHITECTURE.md's Layer 4 section — build it as a route, not a new app.)
 
 ## The constraint that shapes everything here (don't relitigate — checked 2026-07-29)
 
@@ -79,8 +82,9 @@ anything that looks like a complaint, a question, a recommendation request, or s
 to buy/find something. This is completely unremarkable Facebook use — no automation, no bot
 account, nothing that touches the ToS question at all.
 
-**Ingestion:** a simple upload page on `eyespy.klaargesukkel.com` (same basic-auth gate as
-the rest of the tool) where that batch of screenshots gets dropped in. For each screenshot:
+**Ingestion:** a simple upload page at `ops.klaargesukkel.com/eyespy` (same session-login
+gate as the rest of the ops app) where that batch of screenshots gets dropped in. For each
+screenshot:
 
 1. Tag which tracked group it's from (a dropdown of the configured group list — see
    `Group` in the data model below).
@@ -138,8 +142,8 @@ running on an arbitrary schedule that might land before or after the actual capt
    looks like a viable "practical, smart" Klaargesukkel-shaped solution versus noise or
    something too big/regulated to touch.
 6. **Output**: both a written digest and a structured, filterable view — see Output below —
-   viewable on `eyespy.klaargesukkel.com` (basic-auth, same pattern as `apps/admin`),
-   generated on the weekly rhythm described above.
+   viewable at `ops.klaargesukkel.com/eyespy` (same session login as the rest of the ops
+   app), generated on the weekly rhythm described above.
 
 ## Output — "usable manner," not just a text dump
 
@@ -190,10 +194,11 @@ job hitting a handful of APIs on a cadence and writing to a database, plus an up
 manual captures. Vercel Cron + Vercel Postgres (or whatever DB the rest of the monorepo ends
 up using) covers the automated side; the manual-capture upload needs short-lived file storage
 for the screenshot during extraction (Vercel Blob is the natural fit given everything else is
-already on Vercel — a few days' retention at most, not permanent). Root Directory
-`apps/eyespy`, own Vercel project, subdomain `eyespy.klaargesukkel.com`,
-`ADMIN_USER`/`ADMIN_PASSWORD` basic-auth gate same as `apps/admin` (or share the same
-credentials — Albert's call).
+already on Vercel — a few days' retention at most, not permanent). Ships as a route inside
+the existing `apps/ops` project (`/eyespy`) — no new Root Directory, no new Vercel project, no
+new subdomain, no new auth. Its API keys (Google/Bing Search, Google Places, Reddit) get
+added as more env vars on that same `apps/ops` Vercel project, and the Cron job gets added to
+that project too.
 
 ## Prerequisites only Albert can provide
 

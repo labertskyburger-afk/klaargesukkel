@@ -16,36 +16,36 @@ take another one down.
 
 ```
 apps/
-  hub/        → klaargesukkel.com          (landing page — live locally, not deployed yet)
-  dinner/     → dinner.klaargesukkel.com   (dinner planner — built, not deployed yet)
-  admin/      → admin.klaargesukkel.com    (private client tracker — built, not deployed yet)
-  eyespy/     → eyespy.klaargesukkel.com   (private demand-signal research tool — spec only, not built)
-  dashboard/  → dashboard.klaargesukkel.com (private idea/project tracker — built, not deployed yet)
-  orders/     → orders.klaargesukkel.com   (not started)
-  chat/       → chat.klaargesukkel.com     (not started)
-  pace/       → pace.klaargesukkel.com     (not started)
+  hub/     → klaargesukkel.com        (landing page — live)
+  dinner/  → dinner.klaargesukkel.com (dinner planner — live)
+  ops/     → ops.klaargesukkel.com    (private internal ops app — live)
+  orders/  → orders.klaargesukkel.com (not started)
+  chat/    → chat.klaargesukkel.com   (not started)
+  pace/    → pace.klaargesukkel.com   (not started)
 ```
 
 `apps/dinner` is plain static HTML/CSS/JS (no framework, no build step) — a self-contained
 weeknight dinner planner with a freezer tracker, batch-cook scheduling, and shopping lists.
 On Vercel it needs **Framework Preset: Other**, no build command, output directory `./`.
 
-`apps/admin` is a private, basic-auth-protected dashboard tracking clients (which
-engine/product they're on, their domain or WhatsApp number, status). Not linked from the
-public hub. Needs `ADMIN_USER` / `ADMIN_PASSWORD` environment variables set in its Vercel
-project or every request is rejected. See ARCHITECTURE.md for why it exists and where it's
-headed.
+`apps/ops` is a private internal-ops app — not linked from the public hub, gated by a real
+login page (session cookie via `middleware.ts`, needs `ADMIN_USER`/`ADMIN_PASSWORD`/
+`SESSION_SECRET` env vars or every route redirects to a login that can never succeed) with a
+nav bar across three tools:
 
-`apps/eyespy` is a private, basic-auth-protected internal tool (not a client product) — a
-scheduled job that reads compliant sources (official APIs, RSS, open data, deliberately no
-direct scraping of platforms whose ToS forbids it) for a given area and produces a ranked
-digest of local demand/pain-point signals, used as ideation input for what to build next.
-Full spec in EYESPY.md.
+- `/clients` — who your clients are, which engine/product they're on, their domain or
+  WhatsApp number, status.
+- `/projects` — every idea, product, and project across the whole business, tracked by
+  status/priority in a Kanban-style view, plus a cross-project "next steps" panel so nothing
+  gets lost between conversations.
+- `/eyespy` — placeholder for now (spec only, see EYESPY.md); a scheduled job that reads
+  compliant sources (official APIs, RSS, open data, deliberately no direct scraping of
+  platforms whose ToS forbids it) for a given area and produces a ranked digest of local
+  demand/pain-point signals, used as ideation input for what to build next.
 
-`apps/dashboard` is a private, basic-auth-protected tracker — every idea, product, and
-project across the whole business (owned products, client engines, internal tools) in one
-Kanban-style view, grouped by status. Not linked from the public hub. The single place to
-check "did I miss anything" across everything discussed so far.
+This used to be three separate apps (`admin`, `eyespy`, `dashboard`), each its own subdomain
+and browser Basic-Auth popup — merged 2026-07-30 into one login/one nav since all three are
+private single-operator tools. See ARCHITECTURE.md's Layer 4 section for the full reasoning.
 
 Client-delivered products — Cockpit, and eventually a WhatsApp bot engine — are **not** part
 of this monorepo. They're separate repos, built multi-tenant (one app serves every client via

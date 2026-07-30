@@ -68,44 +68,38 @@ Heads up: this file uses `localStorage` for the freezer tracker, shopping checks
 date — that data lives per-browser/per-device, it doesn't sync across devices or to a
 database. Fine for personal use; worth knowing if this becomes a product other people use.
 
-## 5c. Deploying `apps/admin`
+## 5c. Deploying `apps/ops`
 
-Same as the hub (Next.js, standard build), with two extra steps:
+Merged 2026-07-30 from what used to be three separate apps (`admin`, `eyespy`, `dashboard`) —
+see ARCHITECTURE.md's Layer 4 section for why. One app, one login, three routes
+(`/clients`, `/projects`, `/eyespy`), one Vercel project:
 
-1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/admin`.
-2. **Settings → Environment Variables** → add `ADMIN_USER` and `ADMIN_PASSWORD` (pick
-   anything, just don't reuse a password from elsewhere). Without both set, the app rejects
-   every request — it fails closed, not open.
-3. Deploy, confirm the basic-auth prompt appears on the `*.vercel.app` URL, then add
-   `admin.klaargesukkel.com` under **Settings → Domains** + matching GoDaddy CNAME.
+1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/ops`.
+2. **Settings → Environment Variables** → add `ADMIN_USER`, `ADMIN_PASSWORD`, and
+   `SESSION_SECRET`. `ADMIN_USER`/`ADMIN_PASSWORD` are the login credentials (can reuse the
+   old admin/dashboard values). `SESSION_SECRET` is new — any long random string, it's what
+   the session cookie is checked against, not something the user ever types. Without all
+   three set, every route redirects to a login page that can never succeed — it fails closed,
+   not open.
+3. Deploy, confirm you're redirected to `/login` on the `*.vercel.app` URL, log in, confirm
+   the nav bar and all three routes work, then add `ops.klaargesukkel.com` under
+   **Settings → Domains** + matching GoDaddy CNAME.
 4. Don't link to this subdomain from the public hub — it's meant to stay unlisted.
 
-## 5d. Deploying `apps/eyespy`
+To add or update an idea: edit `apps/ops/data/ideas.json` and redeploy. To add or update a
+client: edit `apps/ops/data/clients.json` and redeploy. No database yet for either.
 
-Not built yet — spec only (see EYESPY.md). When it's built, deploy notes:
+When EyeSpy actually gets built (still spec-only, see EYESPY.md), it becomes a route under
+this same app (`apps/ops/app/(app)/eyespy/`) rather than its own project — add its API keys
+(Google/Bing Search, Google Places, Reddit) as more env vars on this same Vercel project, and
+set up a **Vercel Cron** job on it for the scheduled data pull (check current plan limits on
+minimum interval before assuming a cadence).
 
-1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/eyespy`.
-2. Set env vars for whatever API keys it ends up needing (Google/Bing Search, Google
-   Places, Reddit) plus the same `ADMIN_USER`/`ADMIN_PASSWORD` basic-auth pattern as
-   `apps/admin`.
-3. Set up a **Vercel Cron** job for the scheduled data pull — check current plan limits on
-   minimum interval before assuming a cadence.
-4. Add `eyespy.klaargesukkel.com` under **Settings → Domains** + matching GoDaddy CNAME.
-   Don't link it from the public hub — unlisted, same as admin.
-
-## 5e. Deploying `apps/dashboard`
-
-Same as `apps/admin` — Next.js, standard build, basic-auth gated:
-
-1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/dashboard`.
-2. **Settings → Environment Variables** → add `ADMIN_USER` and `ADMIN_PASSWORD` (can reuse
-   the same values as `apps/admin`, or set different ones — Albert's call).
-3. Deploy, confirm the basic-auth prompt appears, then add `dashboard.klaargesukkel.com`
-   under **Settings → Domains** + matching GoDaddy CNAME.
-4. Don't link to this subdomain from the public hub — unlisted, same as admin and eyespy.
-
-To add or update an idea: edit `apps/dashboard/data/ideas.json` and redeploy — no database
-yet, same pattern as the client tracker.
+**Cleanup:** the old `klaargesukkel-admin` and `klaargesukkel-dashboard` Vercel projects are
+superseded by this and should eventually be deleted (or at least have their
+`admin.klaargesukkel.com` / `dashboard.klaargesukkel.com` domains removed, with the matching
+GoDaddy CNAMEs cleaned up) — do this once `ops.klaargesukkel.com` is confirmed working,
+Albert's call on timing.
 
 ## Cockpit (not part of this repo)
 

@@ -15,7 +15,7 @@ const statusStyle: Record<string, string> = {
   paused: "bg-fog/20 text-fog",
 };
 
-export default function AdminHome() {
+export default function ClientsPage() {
   const list = clients as Client[];
   const counts = list.reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -24,10 +24,7 @@ export default function AdminHome() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-14">
-      <p className="text-sm font-medium uppercase tracking-widest text-teal">
-        Klaargesukkel
-      </p>
-      <h1 className="mt-2 text-3xl font-bold text-ink">Client ops</h1>
+      <h1 className="text-3xl font-bold text-ink">Client ops</h1>
       <p className="mt-2 text-ink/60">
         {list.length} client{list.length === 1 ? "" : "s"} tracked ·{" "}
         {Object.entries(counts)
@@ -73,7 +70,7 @@ export default function AdminHome() {
       </div>
 
       <p className="mt-8 max-w-2xl text-xs text-ink/40">
-        This list is edited by hand in <code>apps/admin/data/clients.json</code> and
+        This list is edited by hand in <code>apps/ops/data/clients.json</code> and
         redeployed — no database yet. Once editing this file feels slower than the
         problem deserves, that's the signal to move it to a real datastore.
       </p>

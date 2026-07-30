@@ -33,32 +33,41 @@ client-delivered engine.
 (multi-tenant vs. per-client, what a new product should even do) — flag these back to Albert
 rather than deciding unilaterally, since the Cowork side is where that gets worked through.
 
-## Current state (as of 2026-07-26)
+**Keep `apps/ops/data/ideas.json` in sync — this is not optional.** It's the one place
+Albert checks across the whole business to make sure nothing gets missed (at `/projects`
+inside the ops app — see "Current state" below for why this used to be its own
+`apps/dashboard` app and isn't anymore). Every prerequisite, blocker, or open decision
+mentioned anywhere in this file — and anything you discover or resolve while working — needs
+to be reflected in the relevant project's `nextSteps` array there: add new ones as they come
+up, remove/update ones that get resolved, keep `waitingOn` accurate. Don't let this file and
+the dashboard drift apart — if you update one, check whether the other needs the same update.
 
-Nothing has been pushed to GitHub or deployed to Vercel yet. Everything below exists locally
-in this folder only.
+## Current state (as of 2026-07-30)
+
+`hub`, `dinner`, and `ops` are live and deployed. Nothing else has shipped yet.
 
 ```
 apps/
-  hub/     — Next.js 14 (App Router) + Tailwind. Landing page, product cards. Builds fine
-             locally (Albert confirmed npm install/build/dev all work on his machine).
+  hub/     — Next.js 14 (App Router) + Tailwind. Landing page, product cards. Live at
+             klaargesukkel.com / klaargesukkel.co.za.
   dinner/  — plain static HTML/CSS/JS, no framework, no build step. A real weeknight dinner
              planner (freezer tracker, batch-cook scheduler, shopping lists). Uses
-             localStorage — per-device only, no backend.
-  admin/   — Next.js 14 + Tailwind. Private client tracker, gated by Basic Auth middleware
-             (middleware.ts) reading ADMIN_USER/ADMIN_PASSWORD env vars — fails closed if
-             unset. Data source is apps/admin/data/clients.json (hand-edited, no DB yet).
-  dashboard/ — Next.js 14 + Tailwind. Private idea/project tracker (same Basic Auth pattern
-             as admin), Kanban-style view grouped by status, plus a cross-project "Next
-             steps — across everything" panel sorted by priority. Data source is
-             apps/dashboard/data/ideas.json (hand-edited, no DB yet) — update this file
-             whenever a new idea/product is discussed or an existing one's status changes,
-             same spirit as clients.json for apps/admin. Schema (added 2026-07-30): each
-             idea has a top-level `priority` ("High"/"Medium"/"Low") plus a `nextSteps`
-             array, each entry `{ step, owner, waitingOn, priority }` — `owner` is who's
-             responsible, `waitingOn` is what's blocking it (empty string if nothing is).
-             Keep every open action item as its own `nextSteps` entry rather than one long
-             string, so the cross-project panel stays useful.
+             localStorage — per-device only, no backend. Live at dinner.klaargesukkel.com.
+  ops/     — Next.js 14 + Tailwind. Private internal-ops app, live at ops.klaargesukkel.com.
+             Merged 2026-07-30 from three separate apps (`admin`, `eyespy` stub, `dashboard`)
+             that each had their own subdomain and browser Basic-Auth popup with no shared
+             session or nav — see ARCHITECTURE.md's Layer 4 section for the full reasoning.
+             Now one app, one real login page (session cookie via middleware.ts, not the
+             browser's native auth popup), one nav bar. Requires ADMIN_USER, ADMIN_PASSWORD,
+             and SESSION_SECRET env vars — fails closed (no route renders) if any are unset.
+             Routes: `/clients` (client tracker, data in apps/ops/data/clients.json),
+             `/projects` (idea/project tracker + cross-project "next steps" panel, data in
+             apps/ops/data/ideas.json — schema: each idea has a top-level `priority`
+             ("High"/"Medium"/"Low") plus a `nextSteps` array, each entry
+             `{ step, owner, waitingOn, priority }` — keep every open action item as its own
+             entry, not one long string, or the cross-project panel loses it), and `/eyespy`
+             (placeholder only — not built, see EYESPY.md and the "Pending from Cowork"
+             section below).
 ```
 
 ## Pending from Cowork (added 2026-07-29)
@@ -79,24 +88,33 @@ A matching Gmail signature (`brand/email-signature.html`) already uses the new c
 not part of this repo's deploy, just FYI so the two stay in sync if the wording ever changes
 again.
 
-**New app to scaffold: `apps/eyespy`.** Full spec in EYESPY.md (repo root) — read it before
-starting. Short version: an internal (not client-facing) tool that periodically pulls
-demand/pain-point signals for a region (starting with Durbanville, Cape Town) from compliant
-sources only — official APIs, RSS, open data, explicitly **not** automated scraping of any
-platform whose ToS prohibits it. Facebook Groups are excluded from *automation* (Meta killed
-third-party Groups API access in April 2024) but still get in via a **weekly (Wednesday) manual
-capture workflow**: a human screenshots relevant posts while browsing normally (fully
-ToS-compliant), uploads them to an intake page, Claude's vision support extracts the
-de-identified signal text (no separate OCR needed), and the raw screenshot is discarded, not
-archived — see EYESPY.md's "Manual capture workflow" section for the full design, it's not
-optional detail. Same private/basic-auth pattern as `apps/admin`, own Vercel project + Vercel
-Cron for the automated sources, Vercel Blob for short-lived screenshot storage during
-extraction, subdomain `eyespy.klaargesukkel.com`, not linked from the public hub.
-Prerequisites Albert needs to provide before this can really be built: a Google/Bing Search
-API key, a Google Places API key, Reddit API app credentials (check current free-tier terms
-first, they've shifted more than once), and the actual list of 5–10 Durbanville Facebook
-groups to track. Ask him for these rather than stubbing around them, same pattern as the
-WhatsApp bot's prerequisites.
+**To scaffold: EyeSpy, as a route inside `apps/ops` (not its own app anymore — see the
+2026-07-30 ops merge in "Current state" above).** Full spec in EYESPY.md (repo root) — read
+it before starting. Short version: an internal (not client-facing) tool that periodically
+pulls demand/pain-point signals for a region (starting with Durbanville, Cape Town) from
+compliant sources only — official APIs, RSS, open data, explicitly **not** automated scraping
+of any platform whose ToS prohibits it. Facebook Groups are excluded from *automation* (Meta
+killed third-party Groups API access in April 2024) but still get in via a **weekly
+(Wednesday) manual capture workflow**: a human screenshots relevant posts while browsing
+normally (fully ToS-compliant), uploads them to an intake page, Claude's vision support
+extracts the de-identified signal text (no separate OCR needed), and the raw screenshot is
+discarded, not archived — see EYESPY.md's "Manual capture workflow" section for the full
+design, it's not optional detail. Build it under `apps/ops/app/(app)/eyespy/` (replacing the
+current placeholder page), reuse the existing session-cookie auth (no new auth needed — it's
+already behind the ops login), add a Vercel Cron job on the `apps/ops` project for the
+automated sources, Vercel Blob for short-lived screenshot storage during extraction. Its API
+keys become additional env vars on the same `apps/ops` Vercel project. Prerequisites Albert
+needs to provide before this can really be built (already mirrored in
+`apps/ops/data/ideas.json`'s EyeSpy entry — keep both in sync if any of these change):
+
+- Google/Bing Search API key
+- Google Places API key
+- Reddit API app credentials (check current free-tier terms first, they've shifted more than
+  once)
+- The actual list of 5–10 Durbanville Facebook groups to track
+
+Ask him for these rather than stubbing around them, same pattern as the WhatsApp bot's
+prerequisites.
 
 Core requirement, not an add-on: every signal from every source (automated and manual
 screenshots alike) feeds one persistent, cross-period `Theme` pool per region, and the
@@ -106,29 +124,19 @@ a per-period digest with no memory of prior periods. See EYESPY.md's "Processing
 
 ## Immediate to-do
 
-1. **Git + GitHub.** `git init` at the repo root if not already, commit everything, create a
-   GitHub repo (Albert will need to do the actual github.com/new step or grant you access —
-   confirm with him rather than assuming), push. Exact commands in DEPLOYMENT.md §1.
-2. **Deploy `apps/hub` to Vercel.** Root Directory `apps/hub`, Next.js preset auto-detected.
-   DEPLOYMENT.md §2.
-3. **Point klaargesukkel.com + klaargesukkel.co.za at it via GoDaddy DNS.** DEPLOYMENT.md §3–4.
-   Vercel's domain settings show the exact A/CNAME values to use — don't hardcode old ones.
-4. **Deploy `apps/dinner`.** Different Vercel settings than the other apps — Framework Preset
-   **Other**, no build command, output directory `./`. DEPLOYMENT.md §5b. Subdomain
-   `dinner.klaargesukkel.com`.
-5. **Deploy `apps/admin`.** Set `ADMIN_USER`/`ADMIN_PASSWORD` in that Vercel project's env
-   vars before/at deploy — otherwise every request 401s (which is correct, just don't be
-   surprised). Subdomain `admin.klaargesukkel.com`, and don't link it from the public hub.
-   DEPLOYMENT.md §5c.
-6. **Deploy `apps/dashboard`.** Already fully built (Cowork wrote all the code, nothing left
-   to author) — same Basic Auth env vars as admin, can reuse the same values. Subdomain
-   `dashboard.klaargesukkel.com`, don't link it from the public hub. DEPLOYMENT.md §5e. Do a
-   local `npm install && npm run build` first if you want to verify before pushing — it
-   hasn't been build-tested anywhere yet (no npm registry access existed in the Cowork
-   sandbox that wrote it).
-7. **Sanity check the hub's Cockpit card** still points at
-   `https://cockpit-omega-blush.vercel.app/` (or wherever Cockpit currently lives — confirm
-   with Albert if it's moved).
+1. **Deploy `apps/ops` to Vercel.** New merged app (see "Current state" above) — Root
+   Directory `apps/ops`, Next.js preset auto-detected. Needs `ADMIN_USER`, `ADMIN_PASSWORD`,
+   and `SESSION_SECRET` env vars set before/at deploy — otherwise nothing renders (fails
+   closed, correct behavior, don't be surprised). `ADMIN_USER`/`ADMIN_PASSWORD` can reuse the
+   old admin/dashboard values; `SESSION_SECRET` is new — any random string, doesn't need to
+   be memorable, just long and unique. Subdomain `ops.klaargesukkel.com`, don't link it from
+   the public hub. Build-tested clean by Claude Code 2026-07-30 (full login → nav →
+   logout cycle verified locally).
+2. **Decommission the old `admin` and `dashboard` Vercel projects.** Now superseded by
+   `apps/ops`. Delete both Vercel projects (or at minimum remove their
+   `admin.klaargesukkel.com` / `dashboard.klaargesukkel.com` domains) and the matching CNAME
+   records in GoDaddy once `ops.klaargesukkel.com` is confirmed working — this is a
+   judgment call on timing, flag it to Albert rather than deleting anything unprompted.
 
 ## Known gotchas from building this so far
 
@@ -138,8 +146,7 @@ a per-period digest with no memory of prior periods. See EYESPY.md's "Processing
   you refactor.
 - No sandbox that built this had npm registry access, so builds were never verified with a
   real `npm install && npm run build` from that side — Albert's own machine did confirm the
-  hub builds fine, but double-check `apps/admin` and `apps/dashboard` the same way since
-  neither has been build tested anywhere yet.
+  hub builds fine. `apps/ops` has since been build-tested by Claude Code (2026-07-30).
 - Don't commit `node_modules` or `.next` — both gitignored per-app already, keep it that way.
 
 ## Conventions going forward
@@ -150,5 +157,5 @@ a per-period digest with no memory of prior periods. See EYESPY.md's "Processing
 - New client-delivered engine (bot, platform) → its own repo, multi-tenant from day one
   (tenant resolved by hostname for web, `phone_number_id` for WhatsApp — see ARCHITECTURE.md
   "How white-labeling actually works"), hub gets a portfolio card linking out, nothing more.
-- Every client that goes live anywhere → add a row to `apps/admin/data/clients.json` so the
+- Every client that goes live anywhere → add a row to `apps/ops/data/clients.json` so the
   ops view stays accurate.

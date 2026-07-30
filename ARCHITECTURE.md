@@ -72,34 +72,47 @@ every future client is a database row, not a deployment.
 **Klaarkantoor (added 2026-07-29):** a co-working/flexible-space booking and management
 platform — listing, dynamic pricing, bookings, payments, insurance/compliance, ops admin,
 delivered to a space-operator business the same way Cockpit is delivered to an executive
-onboarding client (single tenant per operator, hostname-resolved, not a cross-operator public
-marketplace — that assumption needs confirming with Albert before payments get built). Own
-repo, own Claude Code session, same as Cockpit/Sukkel Bot. Full spec, feature set, MVP
-staging, and the South African payment-gateway reasoning (Stripe doesn't support SA
-merchants) in that repo's own CLAUDE.md — ask Albert for the path/repo location if it's not
-open in this session.
+onboarding client. **Ships v1 as a single-operator tool, architected so it can become a
+multi-vendor marketplace later without a rewrite** (confirmed with Albert 2026-07-29) — a
+`marketplace_opt_in` tenant flag and a tenant-scopable (not tenant-locked) search API exist
+from day one for this reason, and the payment gateway (PayFast) was picked specifically for
+its native split-payment support so marketplace-mode payouts don't require a gateway
+migration later. Insurance is middleware to real third-party providers, never underwriting —
+no single provider confirmed yet, ships with a manual waiver/document-upload fallback. Own
+repo, own Claude Code session, same as Cockpit/Sukkel Bot. Full spec in that repo's own
+CLAUDE.md — ask Albert for the path/repo location if it's not open in this session.
 
-## Layer 4 — Operations & Intelligence (`apps/admin`, `apps/eyespy`, `apps/dashboard`, this repo)
+## Layer 4 — Operations & Intelligence (`apps/ops`, this repo)
 
-`admin.klaargesukkel.com`, private, basic-auth protected, not linked from the public hub. A
-running list of who your clients are, what they're on (which engine, which domain/number),
-and what state they're in (prospect / active / paused). Starts as a JSON file you hand-edit
-and redeploy — genuinely enough for the first handful of clients. Graduates to a real database
-+ form the moment editing a JSON file and redeploying feels slower than the problem deserves
-(a good sign to watch for, not something to pre-solve now).
+`ops.klaargesukkel.com`, private, not linked from the public hub. **Merged into one app
+(2026-07-30)** — was three separate apps/Vercel projects (`admin`, `eyespy`, `dashboard`),
+each with its own subdomain and its own browser Basic-Auth popup with no shared session or
+navigation between them. That was a reasonable start at one tool, but wrong once there were
+three: since all three are private single-operator tools (not client-facing, so the
+"isolate the blast radius" reasoning below doesn't apply to them), one app with a real login
+page (session cookie, not the browser's native auth popup) and a nav bar beats three separate
+logins. Requires `ADMIN_USER`, `ADMIN_PASSWORD`, and `SESSION_SECRET` env vars — fails closed
+(no route renders) if any are unset. Routes:
 
-`eyespy.klaargesukkel.com` (added 2026-07-29), same private/basic-auth pattern. Not a client
-tool — it's the ideation engine behind the ideation engine: a scheduled job that reads
-compliant sources (official APIs, RSS, open data — deliberately not direct scraping of
-platforms whose ToS prohibits it) for a given area, and produces a ranked digest of what
-people there are struggling with or looking for. Full spec, data sources, and the reasoning
-behind "compliant sources only" in EYESPY.md.
-
-`dashboard.klaargesukkel.com` (added 2026-07-29), same pattern again. The project-control
-view across everything in this section and Layer 2/3 combined — every owned product, client
-engine, and internal tool, tracked by status (Idea → Spec written → In development → Built →
-Live) in one place, so nothing gets lost between conversations. Hand-edited JSON for now,
-same restraint as `apps/admin` and `apps/eyespy`.
+- `/clients` — who your clients are, what they're on (which engine, which domain/number), and
+  what state they're in (prospect / active / paused). Hand-edited JSON
+  (`apps/ops/data/clients.json`) — genuinely enough for the first handful of clients.
+  Graduates to a real database + form the moment editing a JSON file and redeploying feels
+  slower than the problem deserves (a good sign to watch for, not something to pre-solve now).
+- `/projects` — the project-control view across everything in this doc: every owned product,
+  client engine, and internal tool, tracked by status (Idea → Spec written → In development →
+  Built → Live), priority (project-level and per next-step), and — added 2026-07-30 — who
+  owns each open next step and what it's waiting on, plus a cross-project "needs attention"
+  panel sorted by priority. Hand-edited JSON (`apps/ops/data/ideas.json`); when adding or
+  editing an entry, use the `nextSteps: [{ step, owner, waitingOn, priority }]` shape, not a
+  single free-text string, or the cross-project panel loses that item.
+- `/eyespy` — placeholder only as of 2026-07-30 (see EYESPY.md for the full spec, not built
+  yet). Not a client tool — it's the ideation engine behind the ideation engine: a scheduled
+  job that reads compliant sources (official APIs, RSS, open data — deliberately not direct
+  scraping of platforms whose ToS prohibits it) for a given area, and produces a ranked digest
+  of what people there are struggling with or looking for. When it's actually built, its API
+  keys (Google/Bing Search, Google Places, Reddit) become additional env vars on this same
+  `apps/ops` Vercel project — it does not get its own project/subdomain anymore.
 
 ## Summary of what lives where
 
@@ -107,9 +120,7 @@ same restraint as `apps/admin` and `apps/eyespy`.
 |---|---|---|---|
 | Marketing/portfolio | this repo, `apps/hub` | Vercel | klaargesukkel.com |
 | Owned free/paid tools | this repo, `apps/<name>` | Vercel (own project) | `<name>.klaargesukkel.com` |
-| Internal ops tracker | this repo, `apps/admin` | Vercel (own project) | admin.klaargesukkel.com |
-| Internal demand-signal research | this repo, `apps/eyespy` | Vercel (own project + Cron) | eyespy.klaargesukkel.com |
-| Idea/project tracker | this repo, `apps/dashboard` | Vercel (own project) | dashboard.klaargesukkel.com |
+| Internal ops (clients, projects, eyespy) | this repo, `apps/ops` | Vercel (own project + Cron once EyeSpy ships) | ops.klaargesukkel.com |
 | WhatsApp bot engine | separate repo | Vercel or a host with persistent webhooks | N/A — phone numbers, not domains |
 | Cockpit (and future client platforms) | separate repo (already exists for Cockpit) | its own Vercel project | its own domain, or client's own domain via CNAME |
 
