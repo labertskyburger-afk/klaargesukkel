@@ -69,6 +69,16 @@ request (hostname or phone_number_id), tenant config pulled from a database, eve
 downstream of that lookup is client-specific. Build this lookup layer once per engine and
 every future client is a database row, not a deployment.
 
+**Klaarkantoor (added 2026-07-29):** a co-working/flexible-space booking and management
+platform — listing, dynamic pricing, bookings, payments, insurance/compliance, ops admin,
+delivered to a space-operator business the same way Cockpit is delivered to an executive
+onboarding client (single tenant per operator, hostname-resolved, not a cross-operator public
+marketplace — that assumption needs confirming with Albert before payments get built). Own
+repo, own Claude Code session, same as Cockpit/Sukkel Bot. Full spec, feature set, MVP
+staging, and the South African payment-gateway reasoning (Stripe doesn't support SA
+merchants) in that repo's own CLAUDE.md — ask Albert for the path/repo location if it's not
+open in this session.
+
 ## Layer 4 — Operations & Intelligence (`apps/admin`, `apps/eyespy`, `apps/dashboard`, this repo)
 
 `admin.klaargesukkel.com`, private, basic-auth protected, not linked from the public hub. A

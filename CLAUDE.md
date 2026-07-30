@@ -49,10 +49,16 @@ apps/
              (middleware.ts) reading ADMIN_USER/ADMIN_PASSWORD env vars — fails closed if
              unset. Data source is apps/admin/data/clients.json (hand-edited, no DB yet).
   dashboard/ — Next.js 14 + Tailwind. Private idea/project tracker (same Basic Auth pattern
-             as admin), Kanban-style view grouped by status. Data source is
+             as admin), Kanban-style view grouped by status, plus a cross-project "Next
+             steps — across everything" panel sorted by priority. Data source is
              apps/dashboard/data/ideas.json (hand-edited, no DB yet) — update this file
              whenever a new idea/product is discussed or an existing one's status changes,
-             same spirit as clients.json for apps/admin.
+             same spirit as clients.json for apps/admin. Schema (added 2026-07-30): each
+             idea has a top-level `priority` ("High"/"Medium"/"Low") plus a `nextSteps`
+             array, each entry `{ step, owner, waitingOn, priority }` — `owner` is who's
+             responsible, `waitingOn` is what's blocking it (empty string if nothing is).
+             Keep every open action item as its own `nextSteps` entry rather than one long
+             string, so the cross-project panel stays useful.
 ```
 
 ## Pending from Cowork (added 2026-07-29)

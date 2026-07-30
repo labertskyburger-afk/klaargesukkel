@@ -1,13 +1,23 @@
 import ideas from "@/data/ideas.json";
 
+type Priority = "High" | "Medium" | "Low";
+
+type NextStep = {
+  step: string;
+  owner: string;
+  waitingOn: string;
+  priority: Priority;
+};
+
 type Idea = {
   name: string;
   type: string;
   status: string;
+  priority: Priority;
   description: string;
   location: string;
   docs: string;
-  nextAction: string;
+  nextSteps: NextStep[];
   added: string;
 };
 
@@ -25,12 +35,46 @@ const typeStyle: Record<string, string> = {
   "Internal tool": "bg-fog/20 text-fog",
 };
 
+const priorityRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
+
+const priorityDot: Record<Priority, string> = {
+  High: "bg-amber",
+  Medium: "bg-teal",
+  Low: "bg-fog",
+};
+
+const priorityText: Record<Priority, string> = {
+  High: "text-amber",
+  Medium: "text-teal",
+  Low: "text-fog",
+};
+
+function PriorityBadge({ priority }: { priority: Priority }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${priorityText[priority]}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${priorityDot[priority]}`} />
+      {priority}
+    </span>
+  );
+}
+
 export default function DashboardHome() {
-  const list = ideas as Idea[];
+  const list = (ideas as Idea[])
+    .slice()
+    .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
+
   const counts = columns.reduce<Record<string, number>>((acc, col) => {
     acc[col] = list.filter((i) => i.status === col).length;
     return acc;
   }, {});
+
+  const attention = list
+    .flatMap((idea) =>
+      idea.nextSteps.map((s) => ({ idea: idea.name, ideaPriority: idea.priority, ...s }))
+    )
+    .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
 
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-14">
@@ -43,6 +87,39 @@ export default function DashboardHome() {
         gets missed.
       </p>
 
+      {/* Cross-project next steps */}
+      <section className="mt-10 rounded-2xl border border-ink/10 bg-white p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink/70">
+          Next steps — across everything
+        </h2>
+        <p className="mt-1 text-xs text-ink/50">
+          Every open step, sorted by priority, so nothing sits waiting without someone owning
+          it.
+        </p>
+        <div className="mt-4 flex flex-col divide-y divide-ink/10">
+          {attention.length === 0 && (
+            <p className="py-3 text-sm text-ink/40">Nothing open right now.</p>
+          )}
+          {attention.map((a, idx) => (
+            <div key={idx} className="grid grid-cols-1 gap-1 py-3 sm:grid-cols-[140px_1fr_200px] sm:items-start sm:gap-4">
+              <div className="flex items-center gap-2">
+                <PriorityBadge priority={a.priority} />
+              </div>
+              <div>
+                <p className="text-sm text-ink">
+                  <span className="font-semibold">{a.idea}</span> — {a.step}
+                </p>
+                {a.waitingOn && (
+                  <p className="mt-0.5 text-xs text-ink/50">Waiting on: {a.waitingOn}</p>
+                )}
+              </div>
+              <p className="text-xs font-medium text-ink/60 sm:text-right">{a.owner}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Kanban board */}
       <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {columns.map((col) => (
           <div key={col} className="flex flex-col">
@@ -64,6 +141,7 @@ export default function DashboardHome() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-semibold text-ink">{i.name}</h3>
+                      <PriorityBadge priority={i.priority} />
                     </div>
                     <span
                       className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -78,9 +156,26 @@ export default function DashboardHome() {
                     <p className="mt-2.5 text-[11px] font-mono text-fog">{i.location}</p>
                     <div className="mt-2.5 border-t border-ink/10 pt-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/40">
-                        Next
+                        Next steps
                       </p>
-                      <p className="mt-1 text-xs text-ink/70">{i.nextAction}</p>
+                      {i.nextSteps.length === 0 ? (
+                        <p className="mt-1 text-xs text-ink/40">None — nothing pending.</p>
+                      ) : (
+                        <ul className="mt-1.5 flex flex-col gap-2">
+                          {i.nextSteps.map((s, idx) => (
+                            <li key={idx} className="text-xs">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-ink/70">{s.step}</span>
+                                <PriorityBadge priority={s.priority} />
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-ink/45">
+                                Owner: {s.owner}
+                                {s.waitingOn ? ` · Waiting on: ${s.waitingOn}` : ""}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                     <p className="mt-2.5 text-[11px] text-ink/40">
                       {i.docs} · added {i.added}
