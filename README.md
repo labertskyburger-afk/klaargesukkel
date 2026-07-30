@@ -3,7 +3,8 @@
 *Klaar met sukkel.* Small, sharp digital solutions for everyday hassles.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture (hub, owned products,
-client-delivered engines, ops), [BRAND.md](BRAND.md) for identity/positioning, and
+client-delivered engines, ops), [BRAND.md](BRAND.md) for identity/positioning,
+[EYESPY.md](EYESPY.md) for the internal demand-signal research tool, and
 [DEPLOYMENT.md](DEPLOYMENT.md) for how to get this live on klaargesukkel.com /
 klaargesukkel.co.za.
 
@@ -18,6 +19,8 @@ apps/
   hub/        → klaargesukkel.com          (landing page — live locally, not deployed yet)
   dinner/     → dinner.klaargesukkel.com   (dinner planner — built, not deployed yet)
   admin/      → admin.klaargesukkel.com    (private client tracker — built, not deployed yet)
+  eyespy/     → eyespy.klaargesukkel.com   (private demand-signal research tool — spec only, not built)
+  dashboard/  → dashboard.klaargesukkel.com (private idea/project tracker — built, not deployed yet)
   orders/     → orders.klaargesukkel.com   (not started)
   chat/       → chat.klaargesukkel.com     (not started)
   pace/       → pace.klaargesukkel.com     (not started)
@@ -32,6 +35,17 @@ engine/product they're on, their domain or WhatsApp number, status). Not linked 
 public hub. Needs `ADMIN_USER` / `ADMIN_PASSWORD` environment variables set in its Vercel
 project or every request is rejected. See ARCHITECTURE.md for why it exists and where it's
 headed.
+
+`apps/eyespy` is a private, basic-auth-protected internal tool (not a client product) — a
+scheduled job that reads compliant sources (official APIs, RSS, open data, deliberately no
+direct scraping of platforms whose ToS forbids it) for a given area and produces a ranked
+digest of local demand/pain-point signals, used as ideation input for what to build next.
+Full spec in EYESPY.md.
+
+`apps/dashboard` is a private, basic-auth-protected tracker — every idea, product, and
+project across the whole business (owned products, client engines, internal tools) in one
+Kanban-style view, grouped by status. Not linked from the public hub. The single place to
+check "did I miss anything" across everything discussed so far.
 
 Client-delivered products — Cockpit, and eventually a WhatsApp bot engine — are **not** part
 of this monorepo. They're separate repos, built multi-tenant (one app serves every client via

@@ -80,6 +80,33 @@ Same as the hub (Next.js, standard build), with two extra steps:
    `admin.klaargesukkel.com` under **Settings → Domains** + matching GoDaddy CNAME.
 4. Don't link to this subdomain from the public hub — it's meant to stay unlisted.
 
+## 5d. Deploying `apps/eyespy`
+
+Not built yet — spec only (see EYESPY.md). When it's built, deploy notes:
+
+1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/eyespy`.
+2. Set env vars for whatever API keys it ends up needing (Google/Bing Search, Google
+   Places, Reddit) plus the same `ADMIN_USER`/`ADMIN_PASSWORD` basic-auth pattern as
+   `apps/admin`.
+3. Set up a **Vercel Cron** job for the scheduled data pull — check current plan limits on
+   minimum interval before assuming a cadence.
+4. Add `eyespy.klaargesukkel.com` under **Settings → Domains** + matching GoDaddy CNAME.
+   Don't link it from the public hub — unlisted, same as admin.
+
+## 5e. Deploying `apps/dashboard`
+
+Same as `apps/admin` — Next.js, standard build, basic-auth gated:
+
+1. Vercel → **Add New Project** → same repo → **Root Directory**: `apps/dashboard`.
+2. **Settings → Environment Variables** → add `ADMIN_USER` and `ADMIN_PASSWORD` (can reuse
+   the same values as `apps/admin`, or set different ones — Albert's call).
+3. Deploy, confirm the basic-auth prompt appears, then add `dashboard.klaargesukkel.com`
+   under **Settings → Domains** + matching GoDaddy CNAME.
+4. Don't link to this subdomain from the public hub — unlisted, same as admin and eyespy.
+
+To add or update an idea: edit `apps/dashboard/data/ideas.json` and redeploy — no database
+yet, same pattern as the client tracker.
+
 ## Cockpit (not part of this repo)
 
 Cockpit is a separate client project you're still building in Claude Code — Next.js, Prisma,
