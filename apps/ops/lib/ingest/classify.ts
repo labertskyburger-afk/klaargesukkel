@@ -1,0 +1,105 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { prisma } from "@/lib/prisma";
+
+const client = new Anthropic();
+
+const CLASSIFY_TOOL: Anthropic.Tool = {
+  name: "classify_signal",
+  description:
+    "Classify a demand/pain-point signal against the region's existing themes. Either attach it to a matching existing theme, or propose a new theme.",
+  input_schema: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["attach", "new"] },
+      theme_id: {
+        type: "string",
+        description: "Required when action is 'attach' — the id of the matching existing theme.",
+      },
+      label: {
+        type: "string",
+        description: "Required when action is 'new' — a short (3-8 word) label for the theme.",
+      },
+      description: {
+        type: "string",
+        description: "Required when action is 'new' — one sentence describing the underlying need.",
+      },
+      category: {
+        type: "string",
+        description: "Required when action is 'new' — a short category tag, e.g. 'home services', 'food', 'transport'.",
+      },
+    },
+    required: ["action"],
+  },
+};
+
+// Classify a new signal against the region's existing theme pool — attach it
+// to a matching theme, or create a new one. Themes persist and accumulate
+// across periods and sources; this is what makes trend-finding possible
+// (see EYESPY.md's Processing section).
+export async function classifySignal(
+  regionId: string,
+  rawText: string
+): Promise<string> {
+  const existingThemes = await prisma.theme.findMany({
+    where: { regionId, status: "active" },
+    select: { id: true, label: true, description: true, category: true },
+    orderBy: { lastSeenAt: "desc" },
+    take: 100,
+  });
+
+  const themeList =
+    existingThemes.length === 0
+      ? "(no existing themes yet — this will be the first)"
+      : existingThemes
+          .map((t) => `- ${t.id}: ${t.label} (${t.category ?? "uncategorized"}) — ${t.description ?? ""}`)
+          .join("\n");
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 512,
+    tools: [CLASSIFY_TOOL],
+    tool_choice: { type: "tool", name: "classify_signal" },
+    messages: [
+      {
+        role: "user",
+        content: `Signal text:\n"""${rawText}"""\n\nExisting themes for this region:\n${themeList}\n\nDoes this signal match one of the existing themes? If yes, attach it (action "attach", theme_id set). If it's genuinely new, propose a new theme (action "new", with label/description/category).`,
+      },
+    ],
+  });
+
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUse) throw new Error("classifySignal: model did not return a tool call");
+
+  const input = toolUse.input as {
+    action: "attach" | "new";
+    theme_id?: string;
+    label?: string;
+    description?: string;
+    category?: string;
+  };
+
+  if (input.action === "attach" && input.theme_id) {
+    const matched = existingThemes.find((t) => t.id === input.theme_id);
+    if (matched) {
+      await prisma.theme.update({
+        where: { id: matched.id },
+        data: { lastSeenAt: new Date() },
+      });
+      return matched.id;
+    }
+    // Model hallucinated a theme_id — fall through to creating a new theme
+    // rather than silently dropping the signal.
+  }
+
+  const created = await prisma.theme.create({
+    data: {
+      regionId,
+      label: input.label || "Uncategorized signal",
+      description: input.description,
+      category: input.category,
+    },
+  });
+  return created.id;
+}

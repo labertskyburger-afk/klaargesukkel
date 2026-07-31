@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureSeed } from "@/lib/ingest/seed";
 import { pullRss } from "@/lib/ingest/rss";
 import { pullArcGis } from "@/lib/ingest/arcgis";
+import { classifySignal } from "@/lib/ingest/classify";
 import type { ArcGisSourceConfig, NormalizedSignal, RssSourceConfig } from "@/lib/ingest/types";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
 
         if (existing) continue;
 
-        await prisma.signal.create({
+        const created = await prisma.signal.create({
           data: {
             regionId: region.id,
             sourceId: source.id,
@@ -64,6 +65,17 @@ export async function GET(req: NextRequest) {
             capturedVia: "automated",
           },
         });
+
+        // Classify against the region's existing theme pool. Best-effort —
+        // an unclassified signal (themeId null) still exists and can be
+        // classified later; don't let one bad classification fail the pull.
+        try {
+          const themeId = await classifySignal(region.id, signal.rawText);
+          await prisma.signal.update({ where: { id: created.id }, data: { themeId } });
+        } catch (classifyErr) {
+          console.error(`Classification failed for signal ${created.id}:`, classifyErr);
+        }
+
         inserted++;
       }
 
