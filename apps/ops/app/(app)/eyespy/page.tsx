@@ -73,11 +73,21 @@ export default async function EyeSpyPage({
 
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-14">
-      <h1 className="text-3xl font-bold text-ink">EyeSpy</h1>
-      <p className="mt-2 text-ink/60">
-        {region.name} · {themes.length} theme{themes.length === 1 ? "" : "s"} tracked ·{" "}
-        {risingCount} rising this week
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-ink">EyeSpy</h1>
+          <p className="mt-2 text-ink/60">
+            {region.name} · {themes.length} theme{themes.length === 1 ? "" : "s"} tracked ·{" "}
+            {risingCount} rising this week
+          </p>
+        </div>
+        <Link
+          href="/eyespy/capture"
+          className="whitespace-nowrap rounded-full bg-amber px-4 py-2 text-sm font-semibold text-ink transition hover:brightness-95"
+        >
+          Weekly capture
+        </Link>
+      </div>
 
       {categories.length > 0 && (
         <div className="mt-6 flex flex-wrap gap-2">

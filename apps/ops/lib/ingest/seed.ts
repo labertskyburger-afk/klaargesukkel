@@ -51,5 +51,30 @@ export async function ensureSeed() {
     });
   }
 
+  const manualSourceName = "Manual Facebook Group capture";
+  const existingManual = await prisma.source.findFirst({
+    where: { regionId: region.id, name: manualSourceName },
+  });
+  if (!existingManual) {
+    await prisma.source.create({
+      data: {
+        regionId: region.id,
+        type: "manual_capture",
+        name: manualSourceName,
+        active: true,
+        config: {},
+      },
+    });
+  }
+
   return region;
+}
+
+// Signals from the weekly manual-capture upload attach to this Source row.
+export async function getManualCaptureSource(regionId: string) {
+  const source = await prisma.source.findFirst({
+    where: { regionId, type: "manual_capture" },
+  });
+  if (!source) throw new Error("Manual capture source not seeded — call ensureSeed() first");
+  return source;
 }
