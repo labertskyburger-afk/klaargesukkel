@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Region {
+  id       String   @id @default(cuid())
+  name     String
+  keywords String[]
+  lat      Float?
+  lng      Float?
+  radiusKm Float?
+  sources  Source[]
+  groups   Group[]
+  themes   Theme[]
+  signals  Signal[]
+  digests  DigestReport[]
+
+  createdAt DateTime @default(now())
+}
+
+enum SourceType {
+  rss
+  open_data
+  search
+  places
+  reddit
+  manual_capture
+}
+
+model Source {
+  id       String     @id @default(cuid())
+  region   Region     @relation(fields: [regionId], references: [id])
+  regionId String
+  type     SourceType
+  name     String
+  config   Json
+  active   Boolean    @default(true)
+  signals  Signal[]
+
+  createdAt DateTime @default(now())
+}
+
+// A tracked Facebook group — name/label only, never scraped. Used to tag
+// manual-capture uploads during the weekly Wednesday session.
+model Group {
+  id       String   @id @default(cuid())
+  region   Region   @relation(fields: [regionId], references: [id])
+  regionId String
+  label    String
+  signals  Signal[]
+
+  createdAt DateTime @default(now())
+}
+
+enum ThemeStatus {
+  active
+  dormant
+}
+
+model Theme {
+  id          String      @id @default(cuid())
+  region      Region      @relation(fields: [regionId], references: [id])
+  regionId    String
+  label       String
+  description String?
+  category    String?
+  status      ThemeStatus @default(active)
+  firstSeenAt DateTime    @default(now())
+  lastSeenAt  DateTime    @default(now())
+  signals     Signal[]
+
+  createdAt DateTime @default(now())
+
+  @@index([regionId, status])
+}
+
+enum CapturedVia {
+  automated
+  manual_screenshot
+}
+
+model Signal {
+  id          String      @id @default(cuid())
+  region      Region      @relation(fields: [regionId], references: [id])
+  regionId    String
+  source      Source      @relation(fields: [sourceId], references: [id])
+  sourceId    String
+  theme       Theme?      @relation(fields: [themeId], references: [id])
+  themeId     String?
+  group       Group?      @relation(fields: [groupId], references: [id])
+  groupId     String?
+  rawText     String
+  url         String?
+  capturedVia CapturedVia
+  timestamp   DateTime    @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([regionId, themeId])
+  @@index([sourceId])
+}
+
+model DigestReport {
+  id           String   @id @default(cuid())
+  region       Region   @relation(fields: [regionId], references: [id])
+  regionId     String
+  period       String
+  rankedThemes Json
+  generatedAt  DateTime @default(now())
+
+  @@index([regionId, period])
+}
