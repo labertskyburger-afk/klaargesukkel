@@ -42,7 +42,7 @@ to be reflected in the relevant project's `nextSteps` array there: add new ones 
 up, remove/update ones that get resolved, keep `waitingOn` accurate. Don't let this file and
 the dashboard drift apart — if you update one, check whether the other needs the same update.
 
-## Current state (as of 2026-07-30)
+## Current state (as of 2026-07-31)
 
 `hub`, `dinner`, and `ops` are live and deployed. Nothing else has shipped yet.
 
@@ -65,10 +65,20 @@ apps/
              apps/ops/data/ideas.json — schema: each idea has a top-level `priority`
              ("High"/"Medium"/"Low") plus a `nextSteps` array, each entry
              `{ step, owner, waitingOn, priority }` — keep every open action item as its own
-             entry, not one long string, or the cross-project panel loses it), and `/eyespy`
-             (placeholder only — not built, see EYESPY.md and the "Pending from Cowork"
-             section below).
+             entry, not one long string, or the cross-project panel loses it), `/eyespy`
+             (built 2026-07-31 — themes table sorted by trend+volume, per-theme detail with
+             volume-over-time and example signals, category/source filters — see below for
+             what's still blocked), and `/eyespy/capture` (weekly manual-capture upload:
+             screenshot → Claude vision extraction → de-identified Signal, processed
+             entirely in-memory, never persisted to disk/blob storage).
 ```
+
+Postgres (Neon, via Vercel) is now provisioned for `apps/ops` — six tables (Region, Source,
+Group, Theme, Signal, DigestReport) per EYESPY.md's data model. Migrations are hand-applied
+via Neon's SQL console (`apps/ops/prisma/migrations/`), not `prisma migrate deploy` in the
+build — a pooled Neon connection blocks DDL, same lesson as the Cockpit repo. Regular
+app queries go through the pooled `DATABASE_URL` as normal; only schema changes need the
+manual-SQL route.
 
 ## Pending from Cowork (added 2026-07-29)
 
@@ -88,39 +98,47 @@ A matching Gmail signature (`brand/email-signature.html`) already uses the new c
 not part of this repo's deploy, just FYI so the two stay in sync if the wording ever changes
 again.
 
-**To scaffold: EyeSpy, as a route inside `apps/ops` (not its own app anymore — see the
-2026-07-30 ops merge in "Current state" above).** Full spec in EYESPY.md (repo root) — read
-it before starting. Short version: an internal (not client-facing) tool that periodically
-pulls demand/pain-point signals for a region (starting with Durbanville, Cape Town) from
-compliant sources only — official APIs, RSS, open data, explicitly **not** automated scraping
-of any platform whose ToS prohibits it. Facebook Groups are excluded from *automation* (Meta
-killed third-party Groups API access in April 2024) but still get in via a **weekly
-(Wednesday) manual capture workflow**: a human screenshots relevant posts while browsing
-normally (fully ToS-compliant), uploads them to an intake page, Claude's vision support
-extracts the de-identified signal text (no separate OCR needed), and the raw screenshot is
-discarded, not archived — see EYESPY.md's "Manual capture workflow" section for the full
-design, it's not optional detail. Build it under `apps/ops/app/(app)/eyespy/` (replacing the
-current placeholder page), reuse the existing session-cookie auth (no new auth needed — it's
-already behind the ops login), add a Vercel Cron job on the `apps/ops` project for the
-automated sources, Vercel Blob for short-lived screenshot storage during extraction. Its API
-keys become additional env vars on the same `apps/ops` Vercel project. Prerequisites Albert
-needs to provide before this can really be built (already mirrored in
-`apps/ops/data/ideas.json`'s EyeSpy entry — keep both in sync if any of these change):
+**EyeSpy — built 2026-07-31, but not fully wired up yet.** Lives as routes inside `apps/ops`
+(`/eyespy`, `/eyespy/[themeId]`, `/eyespy/capture`), not its own app — see the 2026-07-30 ops
+merge in "Current state" above. Full spec in EYESPY.md. What's actually working:
 
+- Postgres schema live (Region/Source/Group/Theme/Signal/DigestReport)
+- RSS source wired to IOL's Western Cape feed, tested against the live feed
+- Daily Vercel Cron (`/api/cron/ingest`, `apps/ops/vercel.json`) that self-seeds the region
+  and sources, pulls, dedupes, and classifies signals against the region's theme pool
+  (Claude Haiku 4.5 — cheap/fast, right for this) via `lib/ingest/classify.ts`
+- Period-over-period trend computation (rising/falling/steady/dormant) — plain group-by
+  queries, no rollup table, per EYESPY.md's "don't build one until it's slow" guidance
+- The actual dashboard: themes table sorted by trend+volume blend, per-theme detail with a
+  volume-over-time chart and example signals, category/source/manual-only filters
+- The weekly manual-capture upload flow at `/eyespy/capture` — screenshot → Claude Opus 5
+  vision extraction (de-identified text only) → classified Signal. Deliberately skips Vercel
+  Blob: the screenshot is processed entirely in-memory in one request, never persisted, which
+  more strongly guarantees "discard the raw screenshot" than a storage-plus-cleanup-job would
+
+**Still blocked on Albert** (mirrored in `apps/ops/data/ideas.json`'s EyeSpy entry — keep
+both in sync if any of these change):
+
+- `ANTHROPIC_API_KEY`, `CRON_SECRET` env vars on the `apps/ops` Vercel project (classification
+  and manual capture can't run without the first; the cron endpoint has no auth without the
+  second — low risk but cheap to close)
+- The Cape Town Service Requests ArcGIS FeatureServer query URL — the dataset is confirmed
+  real and needs no API key, but the query endpoint itself needs a human with a real browser
+  to find (Claude Code's fetch tooling hit 404s on the ArcGIS Hub site). Once you have it, it
+  goes in the `Source.config.queryUrl` for the "Cape Town Service Requests" source (currently
+  seeded but `active: false`) — flip it active once the URL's in
 - Google/Bing Search API key
 - Google Places API key
 - Reddit API app credentials (check current free-tier terms first, they've shifted more than
   once)
-- The actual list of 5–10 Durbanville Facebook groups to track
+- The actual list of 5–10 Durbanville Facebook groups to track, and who's doing the weekly
+  Wednesday capture session
 
 Ask him for these rather than stubbing around them, same pattern as the WhatsApp bot's
-prerequisites.
-
-Core requirement, not an add-on: every signal from every source (automated and manual
-screenshots alike) feeds one persistent, cross-period `Theme` pool per region, and the
-eyespy dashboard surfaces actual trends (rising/falling/steady, volume over time) — not just
-a per-period digest with no memory of prior periods. See EYESPY.md's "Processing" and
-"Output" sections for the specific data-model and presentation shape this implies.
+prerequisites. **Not yet built:** wiring Search/Places/Reddit into `lib/ingest/` once those
+keys land (follow the same `NormalizedSignal`-returning pattern as `rss.ts`/`arcgis.ts`), and
+a written per-period digest (`DigestReport` — the structured dashboard is built, the
+complementary AI-authored digest text is not).
 
 ## Immediate to-do
 
@@ -137,6 +155,10 @@ a per-period digest with no memory of prior periods. See EYESPY.md's "Processing
    `admin.klaargesukkel.com` / `dashboard.klaargesukkel.com` domains) and the matching CNAME
    records in GoDaddy once `ops.klaargesukkel.com` is confirmed working — this is a
    judgment call on timing, flag it to Albert rather than deleting anything unprompted.
+3. **Add `ANTHROPIC_API_KEY` and `CRON_SECRET` to `apps/ops`'s env vars** so EyeSpy's
+   classification, vision extraction, and cron auth actually work — the code is built and
+   deployed, it just can't run without these. See the EyeSpy section above for the rest of
+   what's blocked (ArcGIS URL, Search/Places/Reddit keys, Facebook groups list).
 
 ## Known gotchas from building this so far
 
