@@ -109,6 +109,18 @@ export async function ensureSeed() {
     });
   }
 
+  // Tracked Facebook groups for the weekly manual-capture workflow — name/
+  // label only, per EYESPY.md (never scraped, just used to tag uploads).
+  const trackedGroups = ["Durbanville Mammas", "Durbanville"];
+  for (const label of trackedGroups) {
+    const existingGroup = await prisma.group.findFirst({
+      where: { regionId: region.id, label },
+    });
+    if (!existingGroup) {
+      await prisma.group.create({ data: { regionId: region.id, label } });
+    }
+  }
+
   const manualSourceName = "Manual Facebook Group capture";
   const existingManual = await prisma.source.findFirst({
     where: { regionId: region.id, name: manualSourceName },
