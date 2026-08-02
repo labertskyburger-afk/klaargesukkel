@@ -163,17 +163,6 @@
         "priority": "High"
       },
       {
-        "step": "Find the Cape Town Service Requests ArcGIS FeatureServer query URL (dataset confirmed real, no API key needed — just needs a human browser, Claude Code's fetch hit 404s on the ArcGIS Hub site) and set it as the source's queryUrl, then flip that source active",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "Medium",
-        "detail": [
-          "Search for 'City of Cape Town Open Data Portal Service Requests' in your browser.",
-          "Find the dataset's ArcGIS Hub page and look for an 'API' or 'View Full Details' link — it should expose a FeatureServer URL (usually ends in /FeatureServer/0 or similar, with a /query endpoint).",
-          "Copy that URL and send it to Claude Code — it goes into apps/ops/data (or wherever the Source seed config lives) as that source's queryUrl, and the source gets flipped from inactive to active."
-        ]
-      },
-      {
         "step": "Provide Google/Bing Search API key",
         "owner": "Albert",
         "waitingOn": "",

@@ -43,10 +43,18 @@ export async function ensureSeed() {
         regionId: region.id,
         type: "open_data",
         name: arcgisSourceName,
-        // Inactive until the real FeatureServer query URL is confirmed and
-        // filled in below — see EYESPY.md / CLAUDE.md prerequisites.
-        active: false,
-        config: { queryUrl: null },
+        active: true,
+        // "Service Requests 2023 until 30 July 2026" — City of Cape Town's
+        // public SAP C3 Notifications feed, confirmed live 2026-08-02.
+        // Scoped to Durbanville via whereClause since the feed covers all
+        // of Cape Town otherwise.
+        config: {
+          queryUrl:
+            "https://services6.arcgis.com/nyYfO9SxHU2ChQd9/arcgis/rest/services/Service_Requests_2023_until_20_May_2026/FeatureServer/0",
+          whereClause: "UPPER(Suburb) LIKE '%DURBANVILLE%'",
+          textFields: ["C3_Complaint_Type", "Notification_type", "Suburb", "Ward"],
+          dateField: "Created_On_Date",
+        },
       },
     });
   }

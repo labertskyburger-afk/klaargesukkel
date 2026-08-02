@@ -137,10 +137,21 @@ actually executed even once. Fixed by adding `/api/cron` to `middleware.ts`'s `P
 that one's correctly meant to run behind the login session, not independently). Still needs a
 real run to confirm end-to-end (next scheduled 06:00 run, or a manual trigger).
 
+**Update 2026-08-02:** the Cape Town Service Requests ArcGIS source is now live. Found via
+`odp-cctegis.opendata.arcgis.com`'s search (the direct dataset/item links kept 404ing or
+requiring an internal City ArcGIS org login — only the search results page surfaced a genuinely
+public one: "Service Requests 2023 until 30 July 2026", a Feature Service resolving to
+`services6.arcgis.com/nyYfO9SxHU2ChQd9/.../Service_Requests_2023_until_20_May_2026/FeatureServer/0`).
+Confirmed with a live query returning real Durbanville records (No Power, No Water, blocked
+sewer, street lights out, etc.). Wired into `apps/ops/lib/ingest/seed.ts` with a
+`whereClause` scoping it to Durbanville (the feed covers all of Cape Town otherwise) and the
+already-seeded database row updated by hand via Vercel's Query tool, same pattern as schema
+migrations.
+
 **Still blocked on Albert** (mirrored in `apps/ops/data/ideas.json`'s EyeSpy entry — keep
 both in sync if any of these change):
 
-- The Cape Town Service Requests ArcGIS FeatureServer query URL — the dataset is confirmed
+ — the dataset is confirmed
   real and needs no API key, but the query endpoint itself needs a human with a real browser
   to find (Claude Code's fetch tooling hit 404s on the ArcGIS Hub site). Once you have it, it
   goes in the `Source.config.queryUrl` for the "Cape Town Service Requests" source (currently
