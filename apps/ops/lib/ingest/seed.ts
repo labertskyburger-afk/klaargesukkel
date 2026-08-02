@@ -2,17 +2,29 @@ import { prisma } from "@/lib/prisma";
 
 const REGION_NAME = "Durbanville, Cape Town";
 
+// Restricted to community/forum sites, not the open web — general geo+intent
+// queries against the whole web mostly surface local businesses' own SEO
+// landing pages (their ad copy literally echoes "are you looking for a
+// reliable plumber in Durbanville?" back at the searcher, since that's what
+// they're optimizing to rank for), not real people asking. Found 2026-08-02
+// after Brave Search's first real results turned out to be 100% plumber ads.
+const SITE_RESTRICTION = "(site:reddit.com OR site:facebook.com OR site:hellopeter.com OR site:gumtree.co.za)";
+
 // Starter geo+intent queries per EYESPY.md — a small, deliberately modest set
 // to stay well within free-tier daily quotas (Google CSE: 100/day, Brave:
 // $5/month free credit covers well over 1,000 requests/month at this volume).
+// Phrased as a real person would ask, not as ad copy would ("can anyone
+// recommend" / "does anyone know a good" — businesses essentially never
+// write their own marketing copy that way), which should filter out most
+// of the SEO-ad noise even before the site restriction does its part.
 // Tune/expand this list later via a direct SQL update to the Source row,
 // same pattern as the ArcGIS source's config.
 const SEARCH_QUERIES = [
-  "looking for a reliable plumber in Durbanville",
-  "recommend a good electrician in Durbanville",
-  "anyone know a trustworthy handyman in Durbanville",
-  "where to find affordable childcare in Durbanville",
-  "does anyone offer dog walking in Durbanville",
+  `${SITE_RESTRICTION} "can anyone recommend" plumber Durbanville`,
+  `${SITE_RESTRICTION} "does anyone know a good" electrician Durbanville`,
+  `${SITE_RESTRICTION} "can anyone recommend" handyman Durbanville`,
+  `${SITE_RESTRICTION} "does anyone know" childcare Durbanville`,
+  `${SITE_RESTRICTION} "does anyone offer" dog walking Durbanville`,
 ];
 
 // Idempotent: safe to call on every cron run. Creates the starting region and
