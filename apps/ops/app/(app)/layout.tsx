@@ -25,6 +25,9 @@ export default function AppLayout({
             <Link href="/eyespy" className="hover:text-ink">
               EyeSpy
             </Link>
+            <Link href="/eyespy/sources" className="hover:text-ink">
+              Sources
+            </Link>
             <a href="/api/logout" className="text-ink/40 hover:text-ink">
               Sign out
             </a>

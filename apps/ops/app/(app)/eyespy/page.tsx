@@ -81,12 +81,20 @@ export default async function EyeSpyPage({
             {risingCount} rising this week
           </p>
         </div>
-        <Link
-          href="/eyespy/capture"
-          className="whitespace-nowrap rounded-full bg-amber px-4 py-2 text-sm font-semibold text-ink transition hover:brightness-95"
-        >
-          Weekly capture
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/eyespy/sources"
+            className="whitespace-nowrap rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold text-ink/70 transition hover:bg-ink/5"
+          >
+            Sources
+          </Link>
+          <Link
+            href="/eyespy/capture"
+            className="whitespace-nowrap rounded-full bg-amber px-4 py-2 text-sm font-semibold text-ink transition hover:brightness-95"
+          >
+            Weekly capture
+          </Link>
+        </div>
       </div>
 
       {categories.length > 0 && (
