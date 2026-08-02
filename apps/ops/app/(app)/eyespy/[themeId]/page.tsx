@@ -21,7 +21,7 @@ export default async function ThemeDetailPage({
   searchParams,
 }: {
   params: { themeId: string };
-  searchParams: { source?: string; manualOnly?: string };
+  searchParams: { source?: string; manualOnly?: string; signalType?: string };
 }) {
   const theme = await prisma.theme.findUnique({ where: { id: params.themeId } });
   if (!theme) notFound();
@@ -36,7 +36,15 @@ export default async function ThemeDetailPage({
 
   const sourceNames = Array.from(new Set(allSignals.map((s) => s.source.name))).sort();
 
+  // Default to demand-only — supply (business/ad content) is kept as
+  // context, not mixed into the primary view, same reasoning as
+  // computeThemeTrend's demand-only counting (see EYESPY.md's 2026-08-02
+  // signal_type addition).
+  const signalTypeFilter = searchParams.signalType ?? "demand";
   let signals = allSignals;
+  if (signalTypeFilter !== "all") {
+    signals = signals.filter((s) => (s.signalType ?? "unclear") === signalTypeFilter);
+  }
   if (searchParams.manualOnly === "1") {
     signals = signals.filter((s) => s.capturedVia === "manual_screenshot");
   }
@@ -44,7 +52,9 @@ export default async function ThemeDetailPage({
     signals = signals.filter((s) => s.source.name === searchParams.source);
   }
 
-  // Volume-over-time: last N weeks, counting from allSignals (unfiltered).
+  // Volume-over-time: last N weeks, demand-only to stay consistent with the
+  // trend numbers above (which also only count demand).
+  const demandSignals = allSignals.filter((s) => s.signalType === "demand");
   const now = new Date();
   const weekBuckets: { label: string; count: number }[] = [];
   for (let i = WEEKS_SHOWN - 1; i >= 0; i--) {
@@ -53,7 +63,7 @@ export default async function ThemeDetailPage({
     weekBuckets.push({ label, count: 0 });
   }
   const bucketIndex = new Map(weekBuckets.map((b, idx) => [b.label, idx]));
-  for (const s of allSignals) {
+  for (const s of demandSignals) {
     const label = isoWeekLabel(s.timestamp);
     const idx = bucketIndex.get(label);
     if (idx !== undefined) weekBuckets[idx].count++;
@@ -95,10 +105,35 @@ export default async function ThemeDetailPage({
         </p>
       </section>
 
-      {/* Filters */}
+      {/* Signal type filter — defaults to demand; supply/unclear are kept as
+          context, not mixed in silently (EYESPY.md, 2026-08-02) */}
       <div className="mt-8 flex flex-wrap items-center gap-2">
+        {(["demand", "supply", "unclear", "all"] as const).map((t) => {
+          const params = new URLSearchParams();
+          if (t !== "demand") params.set("signalType", t);
+          if (searchParams.source) params.set("source", searchParams.source);
+          if (searchParams.manualOnly) params.set("manualOnly", searchParams.manualOnly);
+          const qs = params.toString();
+          return (
+            <Link
+              key={t}
+              href={`/eyespy/${theme.id}${qs ? `?${qs}` : ""}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
+                signalTypeFilter === t
+                  ? "bg-ink text-sand"
+                  : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+              }`}
+            >
+              {t === "all" ? "All types" : t}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Source filters */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Link
-          href={`/eyespy/${theme.id}`}
+          href={`/eyespy/${theme.id}${signalTypeFilter !== "demand" ? `?signalType=${signalTypeFilter}` : ""}`}
           className={`rounded-full px-3 py-1 text-xs font-medium ${
             !searchParams.source && !searchParams.manualOnly
               ? "bg-ink text-sand"
@@ -107,21 +142,25 @@ export default async function ThemeDetailPage({
         >
           All sources
         </Link>
-        {sourceNames.map((name) => (
-          <Link
-            key={name}
-            href={`/eyespy/${theme.id}?source=${encodeURIComponent(name)}`}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              searchParams.source === name
-                ? "bg-ink text-sand"
-                : "bg-ink/5 text-ink/60 hover:bg-ink/10"
-            }`}
-          >
-            {name}
-          </Link>
-        ))}
+        {sourceNames.map((name) => {
+          const params = new URLSearchParams({ source: name });
+          if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+          return (
+            <Link
+              key={name}
+              href={`/eyespy/${theme.id}?${params.toString()}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                searchParams.source === name
+                  ? "bg-ink text-sand"
+                  : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+              }`}
+            >
+              {name}
+            </Link>
+          );
+        })}
         <Link
-          href={`/eyespy/${theme.id}?manualOnly=1`}
+          href={`/eyespy/${theme.id}?manualOnly=1${signalTypeFilter !== "demand" ? `&signalType=${signalTypeFilter}` : ""}`}
           className={`rounded-full px-3 py-1 text-xs font-medium ${
             searchParams.manualOnly === "1"
               ? "bg-ink text-sand"
@@ -138,9 +177,20 @@ export default async function ThemeDetailPage({
           <div key={s.id} className="rounded-2xl border border-ink/10 bg-white p-4">
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm text-ink/80">{s.rawText}</p>
-              <span className="whitespace-nowrap rounded-full bg-ink/5 px-2 py-0.5 text-[11px] text-ink/50">
-                {s.capturedVia === "manual_screenshot" ? "manual" : "automated"}
-              </span>
+              <div className="flex shrink-0 gap-1">
+                {s.signalType && s.signalType !== "demand" && (
+                  <span
+                    className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      s.signalType === "supply" ? "bg-amber/20 text-amber" : "bg-fog/20 text-fog"
+                    }`}
+                  >
+                    {s.signalType}
+                  </span>
+                )}
+                <span className="whitespace-nowrap rounded-full bg-ink/5 px-2 py-0.5 text-[11px] text-ink/50">
+                  {s.capturedVia === "manual_screenshot" ? "manual" : "automated"}
+                </span>
+              </div>
             </div>
             <p className="mt-2 text-[11px] text-ink/40">
               {s.source.name} · {s.timestamp.toISOString().slice(0, 10)}

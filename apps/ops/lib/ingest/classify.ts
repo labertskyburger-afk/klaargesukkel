@@ -6,7 +6,7 @@ const client = new Anthropic();
 const CLASSIFY_TOOL: Anthropic.Tool = {
   name: "classify_signal",
   description:
-    "Classify a demand/pain-point signal against the region's existing themes. Either attach it to a matching existing theme, or propose a new theme.",
+    "Classify a demand/pain-point signal against the region's existing themes, and judge whether it's demand or supply. Either attach it to a matching existing theme, or propose a new theme.",
   input_schema: {
     type: "object",
     properties: {
@@ -27,8 +27,14 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Required when action is 'new' — a short category tag, e.g. 'home services', 'food', 'transport'.",
       },
+      signal_type: {
+        type: "string",
+        enum: ["demand", "supply", "unclear"],
+        description:
+          "Always required. 'demand' = someone asking a question, complaining, or looking for something (a real need). 'supply' = a business/listing/ad describing what it offers — including SEO landing-page copy phrased as a question ('Are you looking for a reliable plumber?') to target search queries; that is still supply, not demand, regardless of phrasing. 'unclear' if genuinely ambiguous — don't guess.",
+      },
     },
-    required: ["action"],
+    required: ["action", "signal_type"],
   },
 };
 
@@ -36,10 +42,15 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
 // to a matching theme, or create a new one. Themes persist and accumulate
 // across periods and sources; this is what makes trend-finding possible
 // (see EYESPY.md's Processing section).
+export type ClassifyResult = {
+  themeId: string;
+  signalType: "demand" | "supply" | "unclear";
+};
+
 export async function classifySignal(
   regionId: string,
   rawText: string
-): Promise<string> {
+): Promise<ClassifyResult> {
   const existingThemes = await prisma.theme.findMany({
     where: { regionId, status: "active" },
     select: { id: true, label: true, description: true, category: true },
@@ -62,7 +73,7 @@ export async function classifySignal(
     messages: [
       {
         role: "user",
-        content: `Signal text:\n"""${rawText}"""\n\nExisting themes for this region:\n${themeList}\n\nDoes this signal match one of the existing themes? If yes, attach it (action "attach", theme_id set). If it's genuinely new, propose a new theme (action "new", with label/description/category).`,
+        content: `Signal text:\n"""${rawText}"""\n\nExisting themes for this region:\n${themeList}\n\nDoes this signal match one of the existing themes? If yes, attach it (action "attach", theme_id set). If it's genuinely new, propose a new theme (action "new", with label/description/category). Also judge signal_type per the tool's instructions — this is required every time.`,
       },
     ],
   });
@@ -78,7 +89,9 @@ export async function classifySignal(
     label?: string;
     description?: string;
     category?: string;
+    signal_type: "demand" | "supply" | "unclear";
   };
+  const signalType = input.signal_type ?? "unclear";
 
   if (input.action === "attach" && input.theme_id) {
     const matched = existingThemes.find((t) => t.id === input.theme_id);
@@ -87,7 +100,7 @@ export async function classifySignal(
         where: { id: matched.id },
         data: { lastSeenAt: new Date() },
       });
-      return matched.id;
+      return { themeId: matched.id, signalType };
     }
     // Model hallucinated a theme_id — fall through to creating a new theme
     // rather than silently dropping the signal.
@@ -101,5 +114,5 @@ export async function classifySignal(
       category: input.category,
     },
   });
-  return created.id;
+  return { themeId: created.id, signalType };
 }

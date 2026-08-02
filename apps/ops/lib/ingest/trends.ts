@@ -15,16 +15,23 @@ const PERIOD_DAYS = 7; // matches EYESPY.md's weekly (Wednesday) digest cadence
 // Period-over-period signal count for a theme, from plain group-by queries —
 // no rollup/materialized-view table, per EYESPY.md's "don't build one until
 // querying live is actually slow" guidance.
+//
+// Only "demand" signals count here — "supply" (business/ad content, even
+// when phrased as a question to target search queries) would otherwise
+// inflate volume/trend with businesses advertising rather than people
+// needing something. Unclassified (signalType null) and "unclear" signals
+// are also excluded until/unless resolved, same reasoning.
 export async function computeThemeTrend(themeId: string): Promise<ThemeTrend> {
   const now = new Date();
   const periodStart = new Date(now.getTime() - PERIOD_DAYS * 24 * 60 * 60 * 1000);
   const priorStart = new Date(now.getTime() - 2 * PERIOD_DAYS * 24 * 60 * 60 * 1000);
+  const demandOnly = { themeId, signalType: "demand" as const };
 
   const [totalCount, periodCount, priorCount] = await Promise.all([
-    prisma.signal.count({ where: { themeId } }),
-    prisma.signal.count({ where: { themeId, timestamp: { gte: periodStart, lte: now } } }),
+    prisma.signal.count({ where: demandOnly }),
+    prisma.signal.count({ where: { ...demandOnly, timestamp: { gte: periodStart, lte: now } } }),
     prisma.signal.count({
-      where: { themeId, timestamp: { gte: priorStart, lt: periodStart } },
+      where: { ...demandOnly, timestamp: { gte: priorStart, lt: periodStart } },
     }),
   ]);
 

@@ -33,29 +33,86 @@ hardcoded value — this should extend to other areas (Namaqualand, nationwide) 
 
 ## Data sources (v1 — compliant only)
 
-- **Reddit, official API.** Free tier is rate-limited (100 QPM) and fine for non-commercial-
-  scale querying of Cape Town-focused subreddits — verify current free-tier terms before
-  building, Reddit's terms have shifted multiple times and will likely shift again. Do not
-  scrape Reddit outside the official API.
-- **Google/Bing Search API, geo+intent queries.** Queries like "looking for [service] in
-  Durbanville", "does anyone know a good [type] in Durbanville", "where to find [thing]
-  Durbanville" — read via the search API's own results/snippets, not by scraping the linked
-  pages directly.
+**Reconciled 2026-08-02** — Albert flagged low confidence in the sources actually live so far
+(just IOL Western Cape RSS + the Cape Town Service Requests feed). Researched and confirmed
+the following, ranked by how directly they capture "someone asking/struggling," not just
+general news:
+
+- **Reddit, official API — highest priority of everything on this list.** The only source
+  here where people describe their own problem in their own words, unfiltered by a
+  journalist's or a government form's framing. Free tier is rate-limited (100 QPM) and fine
+  for non-commercial-scale querying of r/CapeTown and r/southafrica — verify current
+  free-tier terms before building, Reddit's terms have shifted multiple times and will
+  likely shift again. Do not scrape Reddit outside the official API. Blocked on Albert
+  creating API app credentials — see Prerequisites.
+- **GroundUp Q&A RSS** (`https://groundup.org.za/qanda/rss/`) — confirmed live 2026-08-02.
+  GroundUp runs an ongoing reader-question franchise on social grants, ID documents, UIF,
+  housing, home affairs processes — real people's questions, already public-interest
+  journalism, no scraping/ToS question at all. The closest compliant match to raw demand
+  signal available. **No prerequisite — wire in now.**
+- **GroundUp News RSS** (`https://groundup.org.za/sitenews/rss/`) — confirmed live
+  2026-08-02. Their reporting skews toward service delivery, sanitation, housing, health —
+  closer to "struggling with" signal than a general news outlet. **No prerequisite — wire in
+  now.**
+- **Daily Maverick RSS** (`https://www.dailymaverick.co.za/dmrss`) — confirmed live
+  2026-08-02. National scope, but the Maverick Citizen section covers community/social-issue
+  stories worth a secondary cross-check against GroundUp. **No prerequisite — wire in now.**
+- **CapeTalk "Consumer Talk with Wendy Knowler" podcast** (feed:
+  `https://www.omnycontent.com/d/playlist/5dcefa8e-00a9-4595-8ce1-a4ab0080f142/1df82789-1c5e-420b-8aa0-a6dd00f1f24f/5c722964-f3dd-4a32-b2dc-a97a00ebdd50/podcast.rss`,
+  confirmed live and publishing as of 2026-08-02) — a new source *type*: a professional SA
+  consumer journalist already vets and reports on real, widespread consumer complaints
+  weekly. This is human-curated signal, arguably more reliable per-item than anything else
+  on this list since someone else already did the filtering. Ingest via the podcast RSS
+  (episode titles/descriptions are usually enough to classify the complaint topic; only
+  reach for a transcript/audio pipeline if descriptions prove too thin — don't over-build
+  this before checking). **No prerequisite — wire in now.**
+- **Google/Bing/Brave Search API, geo+intent queries — read the caveat below before trusting
+  this source's volume.** A plain query like "looking for a reliable plumber in Durbanville"
+  doesn't return people asking that question — it returns businesses whose SEO copy targets
+  that exact phrase, since that's precisely what a plumber's marketing is optimized to catch.
+  Confirmed 2026-08-02: the live "Plumbing and pipe repair services" theme in `apps/ops` is
+  100% business ad copy (Sprint Plumbers, Anton's Plumbing, NovaCore, Blue Water Plumbing),
+  not a single real demand signal — search engines structurally return supply for
+  commercial-intent phrasing, not demand. Two mitigations, build both:
+  1. **Classify demand vs. supply before counting toward a theme.** Add a `signal_type`
+     field (`demand` / `supply` / `unclear`) to the classification step already running on
+     every signal (see Processing below) — a business describing itself is not evidence
+     someone needs the service. Only `demand`-tagged signals should count toward a theme's
+     volume/trend. Keep `supply` signals on the theme's detail page as context (a suburb
+     flooded with ads might mean the category's already well-served), just don't let them
+     drive "this is trending" conclusions.
+  2. **Restrict queries to domains that host people's own words**, not the open web —
+     `site:reddit.com`, `site:quora.com`, and similar UGC domains, rather than unrestricted
+     geo+intent phrases. Open-web search should be a secondary/context source, not a primary
+     volume driver — GroundUp, Reddit, and the CapeTalk podcast are structurally better
+     sources for demand signal and should be weighted above it.
+  (Brave Search is already active in `apps/ops` and is exactly what's producing the
+  ad-copy-only "Plumbing and pipe repair services" theme right now — either fix it with the
+  signal_type filter + domain restriction above, or set it back to inactive until that's
+  built, since a live source flooding themes with business ads is worse than no source at
+  all. Google/Bing remain reasonable alternatives/additions once the filter exists.)
 - **Google Places API, reviews.** Places API has native radius search — pull reviews for
   businesses/categories in the Durbanville radius, scan for complaint/gap patterns ("wish
   there was...", "no one offers...", "impossible to find..."). This is the best structural
   fit for the "region radius" part of the original idea — it's actually geo-native, unlike
   most forum content.
-- **Local classifieds "wanted" sections** (Gumtree/OLX South Africa) — **verify their
-  robots.txt/ToS explicitly allows this before implementing**, don't assume. If they don't,
-  drop this source rather than scrape around it.
-- **Local news RSS + public comments**, where a Cape Town/Durbanville outlet publishes RSS
-  (most South African news sites do) — RSS is designed for exactly this kind of aggregation,
-  no compliance question.
-- **City of Cape Town open data portal** (data.capetown.gov.za or equivalent) — check for
-  public service-request/complaint data. If it exists, it's explicitly meant for reuse and
-  is probably the single highest-signal, lowest-effort source available — check this first,
-  before building anything else.
+- **Google Trends API (alpha)** — Google opened an official API for this in July 2025;
+  still an application-gated alpha as of 2026-08-02, free for approved testers. Worth
+  applying for: gives quantified search-intent data ("N people searched 'water outage
+  Durbanville' this week") to cross-check what RSS/Reddit/podcast sources surface
+  qualitatively — turns "someone complained once" into "this is actually common." Not
+  urgent — application/approval timeline unknown, don't block other sources on it.
+- **City of Cape Town open data portal** — the Service Requests dataset is live (see
+  "Current state" in CLAUDE.md). Worth periodically checking for additional datasets beyond
+  service requests (load-shedding schedules, water outage bulletins) as the portal adds more.
+
+**Checked and confirmed not viable, don't chase these:**
+- **Hellopeter** — no public API found. Would mean scraping a review platform's complaint
+  pages; ToS status is unclear and review platforms typically restrict this. Skip unless a
+  real API surfaces.
+- **Gumtree/OLX "wanted" listings** — confirmed no official API. Third-party scrapers exist
+  but rely on beating anti-bot measures — a ToS violation, not a gray area. Drop this
+  source, consistent with the compliant-sources-only rule below.
 
 **Excluded from automated collection:** Facebook Groups, Instagram, TikTok, Nextdoor,
 WhatsApp groups — Meta killed third-party API access to Groups entirely in April 2024, and
@@ -129,13 +186,24 @@ running on an arbitrary schedule that might land before or after the actual capt
    recurring, or a one-off. Every signal, from every source (RSS, search, Places, manual
    screenshots — all of it, not just whichever source is easiest), feeds the same pool of
    themes.
-4. **Compute trend, don't just count.** For each theme: total signal count, count this
-   period vs. prior periods, first-seen and last-seen dates, and a simple direction (rising /
-   steady / falling / dormant) from the period-over-period delta. This is plain SQL
-   aggregation over `Signal` grouped by `theme_id` and time bucket — no ML clustering
-   pipeline, no separate analytics tool, Claude's classification step plus a group-by is
-   enough at this scale. Don't build a rollup/materialized-view table until querying this
-   live is actually slow, not before.
+3b. **Same classification pass also tags `signal_type` (demand/supply/unclear) — added
+   2026-08-02.** A signal isn't just "which theme," it's also "is this someone needing the
+   thing, or a business selling it." Prompt Claude with both jobs in one pass: theme match/
+   creation, plus a demand-vs-supply judgment (a listing/ad/business-homepage snippet is
+   `supply`; a question, complaint, or recommendation-request is `demand`; anything unclear
+   stays `unclear` rather than guessing). This exists because search-API results in
+   particular skew almost entirely `supply` — see the Data sources caveat above — and without
+   this tag there's no way to tell a genuinely rising need apart from a suburb that just has a
+   lot of plumbers advertising.
+4. **Compute trend, don't just count — and only count `demand` signals.** For each theme:
+   total `demand`-tagged signal count, count this period vs. prior periods, first-seen and
+   last-seen dates, and a simple direction (rising / steady / falling / dormant) from the
+   period-over-period delta. `supply`-tagged signals are excluded from these numbers entirely
+   — they're kept and shown (see Output below) as separate context, not folded into "is this
+   trending." This is plain SQL aggregation over `Signal` grouped by `theme_id` and time
+   bucket (with a `WHERE signal_type = 'demand'` on the trend query) — no ML clustering
+   pipeline, no separate analytics tool. Don't build a rollup/materialized-view table until
+   querying this live is actually slow, not before.
 5. **Claude writes the digest**: for the top themes by a combination of volume and trend
    (a theme that's small but accelerating matters as much as one that's just consistently
    large), a short write-up with 2-3 supporting example signals, and a flag for whether it
@@ -166,7 +234,15 @@ digest text:
   replacement for the structured view — some sessions Albert will want to skim the narrative,
   others he'll want to filter/drill into the table directly.
 - Filters worth having from the start: by category, by source (including "manual capture
-  only" to see what the Facebook Group pass specifically surfaced), by date range.
+  only" to see what the Facebook Group pass specifically surfaced), by date range, and by
+  `signal_type` (added 2026-08-02) — default the themes table and volume/trend numbers to
+  `demand` only, with an explicit toggle to also show `supply` signals as context rather than
+  mixing them in silently.
+- **Backfill note:** themes classified before the `signal_type` field existed (e.g. the
+  "Plumbing and pipe repair services" theme, currently 100% business ad copy from Brave
+  Search) need a one-time reclassification pass once the field's built, or they'll keep
+  showing inflated/misleading volume until they naturally age out. Don't leave old data
+  silently wrong — reclassify existing signals, don't just apply the filter going forward.
 
 ## Data model (starting point)
 
@@ -180,7 +256,11 @@ digest text:
   trend-finding possible
 - `Signal` — region_id, source_id, theme_id (nullable until classified), raw_text, url
   (nullable — manual captures won't have one), timestamp, captured_via
-  (`automated`/`manual_screenshot`), group_id (nullable, set for manual captures)
+  (`automated`/`manual_screenshot`), group_id (nullable, set for manual captures),
+  `signal_type` (`demand`/`supply`/`unclear` — added 2026-08-02 after confirming search-API
+  results were 100% business ad copy classified as if it were demand; only `demand` signals
+  should count toward a theme's volume/trend computation, see Data sources' search-API
+  caveat above)
 - `DigestReport` — region_id, period, ranked_themes (JSON: theme_id, rank, trend direction,
   period count, total count, example signals, "worth building?" flag), generated_at
 
@@ -202,11 +282,19 @@ that project too.
 
 ## Prerequisites only Albert can provide
 
-- Google/Bing Search API key (or both)
+**Nothing blocks GroundUp (Q&A + News), Daily Maverick, or the CapeTalk podcast** — those
+three are free, live, and ready to wire in with no key/account from Albert. Remaining
+prerequisites, in priority order (reordered 2026-08-02 — Reddit moved to top, it's the
+highest-signal source still blocked):
+
+- **Reddit API app registration** (client ID/secret) — top priority. Check current free-tier
+  terms first (reddit.com/wiki/api, terms have shifted before), then create a "script" app at
+  reddit.com/prefs/apps.
+- Google/Bing/Brave Search API key (any one unblocks geo+intent search queries — Brave has a
+  free developer tier worth checking first)
 - Google Places API key
-- Reddit API app registration (client ID/secret) once free-tier terms are confirmed workable
-- Confirmation the City of Cape Town open data portal has something usable, if Claude Code
-  finds a candidate dataset worth pointing at
+- Google Trends API (alpha) — optional, apply for access at the developer blog announcement;
+  not urgent, approval timeline unknown
 - The actual list of 5–10 Durbanville-area Facebook groups to track for manual capture, and
   who's doing the weekly (Wednesday) capture session (Albert himself or a delegate)
 

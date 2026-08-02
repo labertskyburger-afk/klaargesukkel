@@ -157,6 +157,16 @@
     "docs": "EYESPY.md",
     "nextSteps": [
       {
+        "step": "Run the cron a handful more times (Vercel → Cron Jobs → Run) to finish backfilling signal_type on existing signals — built 2026-08-02: a demand/supply/unclear field is now classified in the same Claude pass, trend/volume math only counts demand, and the theme detail page has a signal-type filter (defaults to demand, supply/unclear/all still viewable as context). The bad Brave-ad batch was already deleted by hand. Capped at 40 classifications per run to avoid the earlier timeout, so ~13-14 runs are needed to fully backfill all existing signals — themes will show low/zero counts until then, that's expected, not a bug",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Medium",
+        "detail": [
+          "Migration apps/ops/prisma/migrations/20260802140000_add_signal_type/migration.sql needs hand-applying via the Query tool first if not already done.",
+          "Full spec in EYESPY.md's Data sources (search-API caveat), Processing (step 3b/4), and Output (signal_type filter + backfill note) sections."
+        ]
+      },
+      {
         "step": "Blocked 2026-08-02: Reddit is showing Albert's account \"blocked by network security\" on reddit.com/prefs/apps — reproduced across a different browser (Edge) and a different network (phone on mobile data), so it looks like an account-level hold rather than anything fixable on our end. Ticket filed with Reddit. Parked, not urgent — everything else (RSS, ArcGIS, Google, Brave, manual capture) is live without it. lib/ingest/reddit.ts is already built and wired in (client_credentials OAuth, r/CapeTown + r/southafrica search for \"Durbanville\"), just needs REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET once the account is unblocked",
         "owner": "Albert",
         "waitingOn": "Reddit's account hold clearing (could be hours to a couple days) — no need to keep retrying, it won't speed it up",

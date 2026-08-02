@@ -84,6 +84,20 @@ enum CapturedVia {
   manual_screenshot
 }
 
+// A signal isn't just "which theme" — it's also "is this someone needing the
+// thing, or a business selling it." Search-API results in particular skew
+// almost entirely supply (SEO landing pages target the exact geo+intent
+// phrasing we search for). Only demand signals count toward a theme's
+// volume/trend; supply is kept as context. Nullable because existing
+// signals predate this field and need a one-time reclassification pass
+// (see the cron route's classify-batch logic), same as themeId being
+// nullable until first classified.
+enum SignalType {
+  demand
+  supply
+  unclear
+}
+
 model Signal {
   id          String      @id @default(cuid())
   region      Region      @relation(fields: [regionId], references: [id])
@@ -97,6 +111,7 @@ model Signal {
   rawText     String
   url         String?
   capturedVia CapturedVia
+  signalType  SignalType?
   timestamp   DateTime    @default(now())
 
   createdAt DateTime @default(now())

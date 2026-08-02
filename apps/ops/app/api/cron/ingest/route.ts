@@ -36,8 +36,11 @@ async function classifyInBatches(
     await Promise.all(
       batch.map(async (signal) => {
         try {
-          const themeId = await classifySignal(regionId, signal.rawText);
-          await prisma.signal.update({ where: { id: signal.id }, data: { themeId } });
+          const result = await classifySignal(regionId, signal.rawText);
+          await prisma.signal.update({
+            where: { id: signal.id },
+            data: { themeId: result.themeId, signalType: result.signalType },
+          });
           classified++;
         } catch (err) {
           console.error(`Classification failed for signal ${signal.id}:`, err);
@@ -126,17 +129,21 @@ export async function GET(req: NextRequest) {
 
   const results = Object.fromEntries(entries);
 
-  // Phase 2: classify a capped batch of unclassified signals (oldest first,
-  // across all sources) — see CLASSIFY_CAP_PER_RUN comment above.
+  // Phase 2: classify a capped batch of signals missing themeId and/or
+  // signalType (oldest first, across all sources) — see CLASSIFY_CAP_PER_RUN
+  // comment above. This also catches legacy signals classified before
+  // signalType existed (themeId set, signalType null), so old data gets
+  // properly reclassified rather than silently left wrong.
+  const needsClassification = { OR: [{ themeId: null }, { signalType: null }] };
   const unclassified = await prisma.signal.findMany({
-    where: { regionId: region.id, themeId: null },
+    where: { regionId: region.id, ...needsClassification },
     orderBy: { createdAt: "asc" },
     take: CLASSIFY_CAP_PER_RUN,
     select: { id: true, rawText: true },
   });
   const classified = await classifyInBatches(region.id, unclassified);
   const remainingUnclassified = await prisma.signal.count({
-    where: { regionId: region.id, themeId: null },
+    where: { regionId: region.id, ...needsClassification },
   });
 
   return NextResponse.json({

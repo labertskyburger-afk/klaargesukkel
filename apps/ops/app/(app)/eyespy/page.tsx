@@ -188,7 +188,10 @@ export default async function EyeSpyPage({
       <p className="mt-8 max-w-2xl text-xs text-ink/40">
         Themes accumulate across every source (automated pulls and manual Facebook Group
         captures alike) — a theme persists across periods rather than resetting each digest, so
-        trend direction is meaningful. See EYESPY.md for the full spec.
+        trend direction is meaningful. Counts here only include "demand" signals (someone
+        asking/struggling) — "supply" signals (businesses/ads, including SEO copy phrased as a
+        question) are classified separately and kept as context on each theme's detail page,
+        not folded into trend numbers. See EYESPY.md for the full spec.
       </p>
     </main>
   );
