@@ -163,6 +163,12 @@
         "priority": "Low"
       },
       {
+        "step": "Parked 2026-08-02: Google Search (geo+intent) is active but returning zero signals — its Programmable Search Engine is still restricted to 4 specific sites (facebook.com, gumtree.co.za, hellopeter.com, reddit.com) since the \"search the entire web\" toggle never worked in Google's UI (see earlier troubleshooting). Brave Search is doing the equivalent job without that restriction (99 signals, working fine), so Albert decided not to keep chasing Google's config — left active as-is, not a bug to fix, just redundant. Revisit only if Brave ever gets throttled/removed",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Low"
+      },
+      {
         "step": "Provide Google Places API key",
         "owner": "Albert",
         "waitingOn": "",
