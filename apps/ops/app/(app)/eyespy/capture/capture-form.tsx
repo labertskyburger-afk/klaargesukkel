@@ -12,26 +12,41 @@ type Result = {
 };
 
 export default function CaptureForm({ groups }: { groups: Group[] }) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [groupId, setGroupId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!file) return;
-    setLoading(true);
-
+  async function uploadOne(file: File): Promise<Result> {
     const formData = new FormData();
     formData.append("screenshot", file);
     if (groupId) formData.append("groupId", groupId);
 
     const res = await fetch("/api/eyespy/capture", { method: "POST", body: formData });
     const data = await res.json();
-    setResults((prev) => [res.ok ? data : { stored: false, error: data.error }, ...prev]);
+    return res.ok ? data : { stored: false, error: data.error };
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (files.length === 0) return;
+    setLoading(true);
+    setProgress({ done: 0, total: files.length });
+
+    // Sequential, not parallel — each upload is its own vision-extraction
+    // call, and running them one at a time keeps this simple and avoids
+    // slamming the API with a burst of concurrent requests.
+    for (const file of files) {
+      const result = await uploadOne(file);
+      setResults((prev) => [result, ...prev]);
+      setProgress((p) => (p ? { done: p.done + 1, total: p.total } : p));
+    }
+
     setLoading(false);
-    setFile(null);
+    setProgress(null);
+    setFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -39,15 +54,22 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
     <div className="mt-8">
       <form onSubmit={onSubmit} className="rounded-2xl border border-ink/10 bg-white p-6">
         <label className="block text-xs font-semibold uppercase tracking-wide text-ink/50">
-          Screenshot
+          Screenshots
         </label>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          multiple
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           className="mt-1 w-full text-sm text-ink/70"
         />
+        {files.length > 0 && (
+          <p className="mt-1 text-xs text-ink/50">
+            {files.length} file{files.length === 1 ? "" : "s"} selected — uploaded one at a time,
+            each processed and de-identified separately.
+          </p>
+        )}
 
         {groups.length > 0 && (
           <>
@@ -71,10 +93,12 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
 
         <button
           type="submit"
-          disabled={!file || loading}
+          disabled={files.length === 0 || loading}
           className="mt-6 w-full rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-sand transition hover:bg-ink/90 disabled:opacity-50"
         >
-          {loading ? "Extracting…" : "Upload & extract"}
+          {loading && progress
+            ? `Extracting… (${progress.done}/${progress.total})`
+            : `Upload & extract${files.length > 1 ? ` (${files.length})` : ""}`}
         </button>
       </form>
 
