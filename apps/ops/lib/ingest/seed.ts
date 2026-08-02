@@ -2,6 +2,19 @@ import { prisma } from "@/lib/prisma";
 
 const REGION_NAME = "Durbanville, Cape Town";
 
+// Starter geo+intent queries per EYESPY.md — a small, deliberately modest set
+// to stay well within free-tier daily quotas (Google CSE: 100/day, Brave:
+// $5/month free credit covers well over 1,000 requests/month at this volume).
+// Tune/expand this list later via a direct SQL update to the Source row,
+// same pattern as the ArcGIS source's config.
+const SEARCH_QUERIES = [
+  "looking for a reliable plumber in Durbanville",
+  "recommend a good electrician in Durbanville",
+  "anyone know a trustworthy handyman in Durbanville",
+  "where to find affordable childcare in Durbanville",
+  "does anyone offer dog walking in Durbanville",
+];
+
 // Idempotent: safe to call on every cron run. Creates the starting region and
 // sources once, does nothing on subsequent runs. New sources (e.g. once the
 // ArcGIS Service Requests URL is confirmed) get added here and picked up
@@ -55,6 +68,43 @@ export async function ensureSeed() {
           textFields: ["C3_Complaint_Type", "Notification_type", "Suburb", "Ward"],
           dateField: "Created_On_Date",
         },
+      },
+    });
+  }
+
+  const googleSearchName = "Google Search (geo+intent)";
+  const existingGoogleSearch = await prisma.source.findFirst({
+    where: { regionId: region.id, name: googleSearchName },
+  });
+  if (!existingGoogleSearch) {
+    await prisma.source.create({
+      data: {
+        regionId: region.id,
+        type: "search",
+        name: googleSearchName,
+        // Inactive until GOOGLE_SEARCH_API_KEY/GOOGLE_SEARCH_ENGINE_ID are
+        // set on the apps/ops Vercel project.
+        active: false,
+        config: { provider: "google", queries: SEARCH_QUERIES },
+      },
+    });
+  }
+
+  const braveSearchName = "Brave Search (geo+intent)";
+  const existingBraveSearch = await prisma.source.findFirst({
+    where: { regionId: region.id, name: braveSearchName },
+  });
+  if (!existingBraveSearch) {
+    await prisma.source.create({
+      data: {
+        regionId: region.id,
+        type: "search",
+        name: braveSearchName,
+        // Inactive until BRAVE_SEARCH_API_KEY is set on the apps/ops Vercel
+        // project. (Bing Search API was retired by Microsoft — Brave is the
+        // second search provider instead.)
+        active: false,
+        config: { provider: "brave", queries: SEARCH_QUERIES },
       },
     });
   }

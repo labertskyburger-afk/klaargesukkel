@@ -19,3 +19,14 @@ export type ArcGisSourceConfig = {
   // Optional field holding a per-record source URL.
   urlField?: string;
 };
+
+export type SearchSourceConfig = {
+  provider: "google" | "brave";
+  // Geo+intent query strings, e.g. "looking for a reliable plumber in
+  // Durbanville" — read via the search API's own result snippets, per
+  // EYESPY.md, not by scraping the linked pages. API keys come from
+  // GOOGLE_SEARCH_API_KEY/GOOGLE_SEARCH_ENGINE_ID or BRAVE_SEARCH_API_KEY
+  // env vars, never stored in this config. (Bing Search API was retired by
+  // Microsoft — Brave Search API is the second provider instead.)
+  queries: string[];
+};

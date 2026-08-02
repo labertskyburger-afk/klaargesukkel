@@ -3,8 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { ensureSeed } from "@/lib/ingest/seed";
 import { pullRss } from "@/lib/ingest/rss";
 import { pullArcGis } from "@/lib/ingest/arcgis";
+import { pullSearch } from "@/lib/ingest/search";
 import { classifySignal } from "@/lib/ingest/classify";
-import type { ArcGisSourceConfig, NormalizedSignal, RssSourceConfig } from "@/lib/ingest/types";
+import type {
+  ArcGisSourceConfig,
+  NormalizedSignal,
+  RssSourceConfig,
+  SearchSourceConfig,
+} from "@/lib/ingest/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,6 +25,8 @@ async function pullForSource(source: {
       return pullRss(source.config as RssSourceConfig);
     case "open_data":
       return pullArcGis(source.config as ArcGisSourceConfig);
+    case "search":
+      return pullSearch(source.config as SearchSourceConfig);
     default:
       return [];
   }
