@@ -3,11 +3,87 @@
     "name": "Dinner System",
     "type": "Owned product",
     "status": "Live",
-    "priority": "Low",
-    "description": "Weeknight dinner planner: freezer inventory tracker, batch-cook scheduling, recipe library, shopping lists. Started as a personal tool for Albert's family.",
+    "priority": "Medium",
+    "description": "Weeknight dinner planner: freezer inventory tracker, batch-cook scheduling, recipe library, shopping lists, editable week plan, leftovers/on-the-fly board, user-added custom recipes, installable as a home-screen PWA. Started as a personal tool for Albert's family, now on the path to a real multi-family product.",
     "location": "apps/dinner, this repo, deployed to dinner.klaargesukkel.com",
-    "docs": "README.md",
-    "nextSteps": [],
+    "docs": "README.md, CLAUDE.md (\"Pending from Cowork (added 2026-08-02)\" section has the full accounts/sync spec)",
+    "nextSteps": [
+      {
+        "step": "Step 1: Create the separate Neon database for apps/dinner (via Vercel)",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High",
+        "detail": [
+          "Go to vercel.com and log in.",
+          "In the left sidebar, click Storage.",
+          "Click Create Database.",
+          "Choose Neon (Postgres).",
+          "Name it dinner-db — keep it separate, do not reuse or connect to the existing apps/ops database.",
+          "Pick a region close to your users (same region as the ops database is fine).",
+          "Click Create. Vercel will show connection details — you don't need to copy anything yet."
+        ]
+      },
+      {
+        "step": "Step 2: Run the migration SQL in Neon's console to create the tables",
+        "owner": "Albert",
+        "waitingOn": "Step 1 (Neon database created)",
+        "priority": "High",
+        "detail": [
+          "In Vercel's Storage tab, click into the dinner-db database you just made.",
+          "Click the button/link labeled 'Open in Neon' or 'Neon Console' — this opens Neon's own dashboard.",
+          "In the Neon console, click SQL Editor in the left sidebar.",
+          "If you see a 'Read-only' toggle near the query box, make sure it's OFF — otherwise the migration will fail.",
+          "Open the file apps/dinner/prisma/migrations/20260802120000_init/migration.sql on your computer, select all, and copy it.",
+          "Paste it into Neon's SQL Editor query box and click Run (or the equivalent execute button).",
+          "Confirm success: in Neon's Tables view (sidebar), you should now see 5 new tables — Account, Session, VerificationToken, User, Household.",
+          "If it fails mentioning 'read-only', go back and toggle that off, then run again."
+        ]
+      },
+      {
+        "step": "Step 3: Create a Resend account and get an API key (Albert confirmed Resend as the email provider for magic-link login)",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High",
+        "detail": [
+          "Go to resend.com and sign up (free tier is fine to start).",
+          "Verify your email if asked.",
+          "Once logged in, go to API Keys in the left sidebar.",
+          "Click Create API Key, name it dinner-app, leave permissions as default.",
+          "Copy the key shown — it is only shown once, save it somewhere safe for a minute.",
+          "Optional but needed to send to anyone besides yourself: go to Domains > Add Domain, add klaargesukkel.com, and add the DNS records it gives you in GoDaddy (same way as other domain records). Until this is verified, Resend can still email your own Resend account address, which is enough to test login yourself."
+        ]
+      },
+      {
+        "step": "Step 4: Set up the apps/dinner Vercel project with the database and API key from steps 1-3",
+        "owner": "Albert",
+        "waitingOn": "Steps 1-3 above",
+        "priority": "High",
+        "detail": [
+          "In Vercel, check if a project called 'dinner' already exists (from when it was a static site).",
+          "If it exists: open it, go to Settings. If not: click Add New > Project, import the Klaargesukkel GitHub repo, and set Root Directory to apps/dinner — Framework Preset should auto-detect as Next.js.",
+          "In the project's Settings > Environment Variables, add DATABASE_URL: go back to Storage > dinner-db > Connect, and copy the POOLED connection string (not the direct one).",
+          "Add AUTH_SECRET: any long random string works, e.g. Xk9mP2vQ7rN4wL8tY5jH3cF6bA1sD0zE9gK2mR7nV4xW6uT — you never need to remember it.",
+          "Add RESEND_API_KEY: paste the key copied from Resend in step 3.",
+          "Make sure all three are enabled for the Production environment (Preview/Development too if you want branch deploys to work).",
+          "Go to Deployments and trigger a new deployment so it picks up the new env vars."
+        ]
+      },
+      {
+        "step": "Step 5: Real-browser smoke test of the deployed app — magic-link login, all 5 tabs, the import banner, and cross-device sync",
+        "owner": "Albert, via Claude Code",
+        "waitingOn": "Step 4 (Vercel deploy live with all env vars)",
+        "priority": "High",
+        "detail": [
+          "Tell Claude Code once steps 1-4 are done — it will trigger/verify the deploy, do a real magic-link login test, click through all 5 tabs (tonight/tracker/library/shopping/rhythm) to confirm data saves and syncs, and test the 'import this device's data' banner if your browser still has old localStorage data."
+        ]
+      },
+      {
+        "step": "Decide pricing/access model for other families (free, paid, waitlist) — v1 ships scoped to just Albert syncing his own devices, no invite/multi-user-per-household flow yet",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Low"
+      }
+    ],
     "added": "2026-07-26"
   },
   {
@@ -41,7 +117,14 @@
         "step": "Meta Business Manager verification + WhatsApp Cloud API access",
         "owner": "Albert",
         "waitingOn": "Meta's business verification process (can take days — start early)",
-        "priority": "High"
+        "priority": "High",
+        "detail": [
+          "Go to business.facebook.com and create a Business Manager account if you don't already have one (use Klaargesukkel's business details, not personal).",
+          "In Business Settings, go to Business Info and start Business Verification — you'll need a business document (CIPC registration, or similar SA business proof) and it can take several days to process, so start this first.",
+          "Once verified, go to developers.facebook.com, create a new App, add the 'WhatsApp' product to it.",
+          "In the app's WhatsApp > API Setup page, note the temporary access token, the phone number ID, and the WhatsApp Business Account ID — these get handed to Claude Code when the new repo/session starts.",
+          "For a permanent (non-expiring) token, generate a System User token in Business Settings > System Users instead of using the temporary one."
+        ]
       },
       {
         "step": "Decide hosting: Railway vs small VPS",
@@ -77,31 +160,61 @@
         "step": "Add ANTHROPIC_API_KEY and CRON_SECRET to apps/ops's Vercel env vars",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "High"
+        "priority": "High",
+        "detail": [
+          "Get an Anthropic API key: go to console.anthropic.com, log in, go to API Keys, click Create Key, copy it.",
+          "In Vercel, open the apps/ops project > Settings > Environment Variables.",
+          "Add ANTHROPIC_API_KEY with the value you just copied.",
+          "Add CRON_SECRET with any random string you make up (used to authenticate the scheduled ingest job, not a real account credential).",
+          "Enable both for Production, then redeploy so they take effect."
+        ]
       },
       {
         "step": "Find the Cape Town Service Requests ArcGIS FeatureServer query URL (dataset confirmed real, no API key needed — just needs a human browser, Claude Code's fetch hit 404s on the ArcGIS Hub site) and set it as the source's queryUrl, then flip that source active",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "Medium"
+        "priority": "Medium",
+        "detail": [
+          "Search for 'City of Cape Town Open Data Portal Service Requests' in your browser.",
+          "Find the dataset's ArcGIS Hub page and look for an 'API' or 'View Full Details' link — it should expose a FeatureServer URL (usually ends in /FeatureServer/0 or similar, with a /query endpoint).",
+          "Copy that URL and send it to Claude Code — it goes into apps/ops/data (or wherever the Source seed config lives) as that source's queryUrl, and the source gets flipped from inactive to active."
+        ]
       },
       {
         "step": "Provide Google/Bing Search API key",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "Medium"
+        "priority": "Medium",
+        "detail": [
+          "Google option: go to console.cloud.google.com, create/select a project, enable the 'Custom Search API', create credentials (API key), and also set up a Programmable Search Engine at programmablesearchengine.google.com to get a Search Engine ID.",
+          "Bing option: go to portal.azure.com, create a 'Bing Search' resource (Cognitive Services), and copy the key from its Keys and Endpoint page.",
+          "Send whichever key (plus search engine ID, if Google) to Claude Code."
+        ]
       },
       {
         "step": "Provide Google Places API key",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "Medium"
+        "priority": "Medium",
+        "detail": [
+          "Go to console.cloud.google.com, select the same project used for Search (or create one).",
+          "Go to APIs & Services > Library, search for 'Places API', click Enable.",
+          "Go to APIs & Services > Credentials, click Create Credentials > API Key, copy it.",
+          "Consider restricting the key to the Places API only under the key's settings, for safety."
+        ]
       },
       {
         "step": "Provide Reddit API app credentials (check current free-tier terms first)",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "Medium"
+        "priority": "Medium",
+        "detail": [
+          "Check Reddit's current API pricing/free-tier terms at reddit.com/wiki/api before proceeding — terms have shifted before.",
+          "Go to reddit.com/prefs/apps while logged in.",
+          "Click 'create another app...' at the bottom.",
+          "Choose type 'script', fill in a name and description, set redirect uri to something like http://localhost:3000 (not used for script apps but required).",
+          "After creating, note the client ID (under the app name) and client secret — send both to Claude Code."
+        ]
       },
       {
         "step": "Provide list of 5–10 Durbanville Facebook groups to track, and who's doing the weekly Wednesday capture session",
@@ -131,7 +244,13 @@
         "step": "Set up PayFast merchant account for the pilot operator (confirmed default gateway 2026-07-29 — native Split Payments feature means marketplace mode later doesn't need a gateway migration)",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "High"
+        "priority": "High",
+        "detail": [
+          "Go to payfast.co.za and sign up for a merchant account (the pilot operator's business details, not Klaargesukkel's, since they're the one receiving booking payments).",
+          "Complete PayFast's KYC/verification (business documents, bank account details) — this can take a few days, similar to Meta's process, so start early.",
+          "Once approved, go to Settings in the PayFast dashboard and note the Merchant ID, Merchant Key, and (if using it) the Passphrase — these get handed to Claude Code for the payment integration.",
+          "If marketplace/multi-operator mode is wanted later, look into PayFast's Split Payments feature in their docs — no separate gateway migration needed per the 2026-07-29 decision."
+        ]
       },
       {
         "step": "Identify a real pilot operator to build for",

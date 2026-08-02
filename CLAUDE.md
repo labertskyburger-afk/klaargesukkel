@@ -50,9 +50,20 @@ the dashboard drift apart — if you update one, check whether the other needs t
 apps/
   hub/     — Next.js 14 (App Router) + Tailwind. Landing page, product cards. Live at
              klaargesukkel.com / klaargesukkel.co.za.
-  dinner/  — plain static HTML/CSS/JS, no framework, no build step. A real weeknight dinner
-             planner (freezer tracker, batch-cook scheduler, shopping lists). Uses
-             localStorage — per-device only, no backend. Live at dinner.klaargesukkel.com.
+  dinner/  — Next.js 14 (App Router) + Tailwind, converted from static HTML on 2026-08-02 (see
+             "Pending from Cowork (added 2026-08-02)" below). A real weeknight dinner planner
+             (freezer tracker, batch-cook scheduler, recipe library, shopping lists, editable
+             week plan, a leftovers/on-the-fly board, user-added custom recipes), installable
+             as a home-screen PWA. Accounts (Auth.js, Resend email magic-link) + server-side
+             sync (GET/PUT /api/state, debounced, scoped to the logged-in user's household) are
+             built and build-tested locally (`npm run build` passes clean) but **not yet live**
+             — blocked on Albert provisioning a separate Neon Postgres project, a Resend
+             account, and the Vercel project's env vars (DATABASE_URL, AUTH_SECRET,
+             RESEND_API_KEY). See apps/ops/data/ideas.json's Dinner System entry for the exact
+             remaining steps. Until that lands, dinner.klaargesukkel.com is still serving the
+             old static localStorage-only build — don't deploy this app's `main` branch until
+             the new Neon DB exists and its migration has been hand-applied, or the live site
+             will break (no DATABASE_URL to connect to).
   ops/     — Next.js 14 + Tailwind. Private internal-ops app, live at ops.klaargesukkel.com.
              Merged 2026-07-30 from three separate apps (`admin`, `eyespy` stub, `dashboard`)
              that each had their own subdomain and browser Basic-Auth popup with no shared
@@ -139,6 +150,108 @@ prerequisites. **Not yet built:** wiring Search/Places/Reddit into `lib/ingest/`
 keys land (follow the same `NormalizedSignal`-returning pattern as `rss.ts`/`arcgis.ts`), and
 a written per-period digest (`DigestReport` — the structured dashboard is built, the
 complementary AI-authored digest text is not).
+
+## Pending from Cowork (added 2026-08-02)
+
+**Update from Claude Code (2026-08-02): the accounts/sync build described below is done.**
+`apps/dinner` is now Next.js 14 + Tailwind, all existing client logic (freezer tracker,
+editable week plan, leftovers board, custom recipes, shopping lists) ported into React
+components, Prisma schema + hand-written migration ready at
+`apps/dinner/prisma/migrations/20260802120000_init/`, Auth.js v5 wired up with Resend
+(Albert's answer to the "which email provider" question below — already applied), GET/PUT
+`/api/state` with 500ms-debounced client sync and one retry on failed PUTs, and the one-time
+localStorage-import banner. `vercel.json` is back to `{"framework": "nextjs"}` and the old
+static `index.html`/top-level `manifest.json`/`icons/` are deleted. `npm install && npm run
+build` passes clean locally. Also already answered: v1 ships scoped to **just Albert syncing
+his own devices** — no invite/multi-user-per-household/billing flow built, that's a later
+phase per Albert's own instruction.
+
+**What's still blocked on Albert** (dashboard actions Claude Code can't do — needs real
+credentials): provisioning the separate Neon Postgres project, hand-applying the migration SQL
+via Neon's console, creating a Resend account, and setting `DATABASE_URL`/`AUTH_SECRET`/
+`RESEND_API_KEY` on the `apps/dinner` Vercel project (Root Directory `apps/dinner`, Framework
+Preset Next.js). Once those are in place, this needs a real-browser smoke test of the full
+flow (magic-link login, all 5 tabs, the import banner, cross-device sync) before treating it as
+shipped — see apps/ops/data/ideas.json's Dinner System entry for the itemized list.
+
+Albert asked in Cowork to have `apps/dinner` upgraded into a genuinely practical daily tool
+(he's now doing all Mon–Thu family cooking) and, eventually, a product other families can use.
+Two decisions came out of that conversation:
+
+**Already shipped directly from Cowork (no npm/build needed, so done there rather than
+handed to you):** `apps/dinner/index.html` got a real usability pass — a "Leftovers & on-the-fly
+plans" board (freeform notes so mid-week reuse plans like "leftover mince → lasagna Thu" don't
+get lost), an editable subtitle (household composition, no longer hardcoded to Albert's
+family), an editable week plan (tap any cell to change it, with today's row highlighted), a
+"add your own recipe" flow so Albert's own recipes join the built-in library and the Tonight
+picker, a "copy shopping list" button (for pasting into Sixty60 or WhatsApp), a fixed missing
+viewport meta tag, and PWA installability (`manifest.json` + `icons/icon-192.png` +
+`icons/icon-512.png`, generated with Pillow — simple navy/gold plate-and-cutlery mark, replace
+if you want something more polished). All still localStorage-backed, no schema changes, no
+build step involved — verified with `node --check` on the extracted script and a tag-balance
+pass rather than a real browser (no headless browser available in that sandbox). **Worth a
+real browser smoke-test before/after your next deploy of this app**, since it hasn't been
+visually verified.
+
+**Decision: add accounts + server-side sync — this is your side of the line (npm/Postgres/
+Next.js).** The tool currently only lives in whichever browser storage it's opened in, so
+Albert's phone and laptop have separate, unsynced state, and there's no way to hand a working
+copy to another family without them starting from zero on a disconnected device. Agreed
+approach:
+
+- **Convert `apps/dinner` from static HTML to Next.js 14 + Tailwind**, matching `hub`/`ops`,
+  so it can have API routes and a database. This is the biggest structural change — budget
+  for it accordingly, and it changes the Vercel project's Framework Preset back to Next.js
+  (auto-detected) instead of "Other."
+- **Keep the existing client-side data shapes as-is** rather than redesigning a relational
+  schema — the fastest, lowest-risk path is to keep the same JSON blobs the localStorage
+  version already uses (tracker state, shop-check state, batch date, week-plan overrides,
+  leftovers array, custom recipes array) and just move where they're persisted. Concretely,
+  a `Household` table with JSON columns mirroring each of those, e.g. (Prisma):
+  ```
+  model User {
+    id        String    @id @default(cuid())
+    email     String    @unique
+    household Household?
+    createdAt DateTime  @default(now())
+  }
+  model Household {
+    id            String   @id @default(cuid())
+    ownerUserId   String   @unique
+    subtitle      String?
+    trackerState  Json     @default("{}")
+    shopChecks    Json     @default("{}")
+    batchDate     String?
+    weekOverride  Json     @default("{}")
+    leftovers     Json     @default("[]")
+    customRecipes Json     @default("[]")
+    updatedAt     DateTime @updatedAt
+  }
+  ```
+  One `GET /api/state` + `PUT /api/state` pair (auth-scoped to the logged-in user's household)
+  replaces every `localStorage.getItem`/`setItem` call in the current script — client logic
+  otherwise barely changes. Debounce the PUT on rapid changes (checkbox taps) rather than
+  firing one request per click.
+- **Auth: Auth.js with an email magic-link provider** (passwordless — fits a busy-parent
+  audience better than a password to remember), same library Cockpit already uses, so the
+  pattern's familiar. Needs an email-sending provider (Resend or similar) — ask Albert which
+  he wants before wiring it up, don't default silently.
+- **Separate Neon Postgres project from `apps/ops`'s**, not new tables in the same database —
+  this one will hold real families' personal data (not just Albert's internal business data),
+  worth keeping the blast radius/access separate from day one.
+- **One-time import for Albert's own existing data**: on first login, if the browser still has
+  the old localStorage keys (`dinnerTracker`, `dinnerShopChecks`, `dinnerBatchDate`,
+  `dinnerWeekOverride`, `dinnerLeftovers`, `dinnerCustomRecipes`, `dinnerSubtitle`), offer a
+  one-click "import this device's data" that POSTs it into the new household record — otherwise
+  he loses everything he's already customized when accounts land.
+
+**Still open, ask Albert rather than deciding unilaterally:**
+- ~~Email provider for magic links~~ — resolved 2026-08-02: Resend, already wired up.
+- ~~Whether v1 ships as "just Albert" first vs. multi-family~~ — resolved 2026-08-02:
+  just-Albert first, already built that way.
+- Timeline/priority for this relative to Cockpit and Sukkel Bot work
+- Pricing/access model for other families eventually (free, paid, waitlist) — explicitly a
+  business decision, not yours to make
 
 ## Immediate to-do
 

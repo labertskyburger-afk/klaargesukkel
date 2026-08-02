@@ -7,6 +7,7 @@ type NextStep = {
   owner: string;
   waitingOn: string;
   priority: Priority;
+  detail?: string[];
 };
 
 type Idea = {
@@ -48,6 +49,20 @@ const priorityText: Record<Priority, string> = {
   Medium: "text-teal",
   Low: "text-fog",
 };
+
+function StepDetail({ detail }: { detail?: string[] }) {
+  if (!detail || detail.length === 0) return null;
+  return (
+    <ol className="mt-1.5 flex flex-col gap-1 border-l-2 border-teal/20 pl-3">
+      {detail.map((line, idx) => (
+        <li key={idx} className="text-[11px] leading-relaxed text-ink/55">
+          <span className="mr-1 font-semibold text-teal/70">{idx + 1}.</span>
+          {line}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function PriorityBadge({ priority }: { priority: Priority }) {
   return (
@@ -109,6 +124,7 @@ export default function ProjectsPage() {
                 {a.waitingOn && (
                   <p className="mt-0.5 text-xs text-ink/50">Waiting on: {a.waitingOn}</p>
                 )}
+                <StepDetail detail={a.detail} />
               </div>
               <p className="text-xs font-medium text-ink/60 sm:text-right">{a.owner}</p>
             </div>
@@ -169,6 +185,7 @@ export default function ProjectsPage() {
                                 Owner: {s.owner}
                                 {s.waitingOn ? ` · Waiting on: ${s.waitingOn}` : ""}
                               </p>
+                              <StepDetail detail={s.detail} />
                             </li>
                           ))}
                         </ul>
