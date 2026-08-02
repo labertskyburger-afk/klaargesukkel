@@ -94,13 +94,13 @@
     "docs": "EYESPY.md",
     "nextSteps": [
       {
-        "step": "Run the cron a handful more times (Vercel → Cron Jobs → Run) to finish backfilling signal_type on existing signals — built 2026-08-02: a demand/supply/unclear field is now classified in the same Claude pass, trend/volume math only counts demand, and the theme detail page has a signal-type filter (defaults to demand, supply/unclear/all still viewable as context). The bad Brave-ad batch was already deleted by hand. Capped at 40 classifications per run to avoid the earlier timeout, so ~13-14 runs are needed to fully backfill all existing signals — themes will show low/zero counts until then, that's expected, not a bug",
+        "step": "Blocked 2026-08-02: Anthropic account is out of API credits (\"Your credit balance is too low\") — every classification call is failing, so all new signals (including the fresh Google Places batch) are piling up unclassified. Signals themselves are still being pulled/inserted fine, nothing is lost, they just need reclassifying once credits are back",
         "owner": "Albert",
         "waitingOn": "",
-        "priority": "Medium",
+        "priority": "High",
         "detail": [
-          "Migration apps/ops/prisma/migrations/20260802140000_add_signal_type/migration.sql needs hand-applying via the Query tool first if not already done.",
-          "Full spec in EYESPY.md's Data sources (search-API caveat), Processing (step 3b/4), and Output (signal_type filter + backfill note) sections."
+          "Go to console.anthropic.com, click Plans & Billing, and add credits (or set up auto-reload).",
+          "Once topped up, trigger the cron a handful of times (Vercel → Cron Jobs → Run) to catch up on both the signal_type backfill and the new Places reviews — capped at 40 classifications per run, so it'll take several triggers."
         ]
       },
       {
