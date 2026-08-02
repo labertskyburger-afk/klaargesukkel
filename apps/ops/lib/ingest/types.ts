@@ -30,3 +30,17 @@ export type SearchSourceConfig = {
   // Microsoft — Brave Search API is the second provider instead.)
   queries: string[];
 };
+
+export type RedditSourceConfig = {
+  // Subreddits to search within, e.g. ["CapeTown", "southafrica"] — per
+  // EYESPY.md, official API only, read-only, no scraping outside it.
+  subreddits: string[];
+  // Search query run against each subreddit (via /r/<sub>/search,
+  // restrict_sr=1) — kept broad ("Durbanville") since this is meant to be
+  // the least-filtered source, people describing their own problem
+  // unfiltered by a journalist's or form's framing. Classification handles
+  // relevance downstream, same as RSS.
+  query: string;
+  // Credentials come from REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET env vars,
+  // never stored in this config.
+};

@@ -62,9 +62,6 @@ async function pullBrave(query: string): Promise<NormalizedSignal[]> {
 // and Bing source rows to use both.
 export async function pullSearch(config: SearchSourceConfig): Promise<NormalizedSignal[]> {
   const pull = config.provider === "google" ? pullGoogle : pullBrave;
-  const results: NormalizedSignal[] = [];
-  for (const query of config.queries) {
-    results.push(...(await pull(query)));
-  }
-  return results;
+  const perQuery = await Promise.all(config.queries.map((query) => pull(query)));
+  return perQuery.flat();
 }

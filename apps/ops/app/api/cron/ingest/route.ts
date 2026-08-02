@@ -4,10 +4,12 @@ import { ensureSeed } from "@/lib/ingest/seed";
 import { pullRss } from "@/lib/ingest/rss";
 import { pullArcGis } from "@/lib/ingest/arcgis";
 import { pullSearch } from "@/lib/ingest/search";
+import { pullReddit } from "@/lib/ingest/reddit";
 import { classifySignal } from "@/lib/ingest/classify";
 import type {
   ArcGisSourceConfig,
   NormalizedSignal,
+  RedditSourceConfig,
   RssSourceConfig,
   SearchSourceConfig,
 } from "@/lib/ingest/types";
@@ -27,6 +29,8 @@ async function pullForSource(source: {
       return pullArcGis(source.config as ArcGisSourceConfig);
     case "search":
       return pullSearch(source.config as SearchSourceConfig);
+    case "reddit":
+      return pullReddit(source.config as RedditSourceConfig);
     default:
       return [];
   }
@@ -47,55 +51,60 @@ export async function GET(req: NextRequest) {
     where: { regionId: region.id, active: true },
   });
 
-  const results: Record<string, { pulled: number; inserted: number; error?: string }> = {};
+  // Sources run in parallel — with several external APIs now active (RSS,
+  // ArcGIS, Google/Brave Search, each doing multiple requests), running them
+  // one at a time risked the total exceeding Vercel's 60s function limit,
+  // silently starving whichever source came last in the loop.
+  const entries = await Promise.all(
+    sources.map(async (source) => {
+      try {
+        const signals = await pullForSource(source);
+        let inserted = 0;
 
-  for (const source of sources) {
-    try {
-      const signals = await pullForSource(source);
-      let inserted = 0;
+        for (const signal of signals) {
+          const existing = signal.url
+            ? await prisma.signal.findFirst({ where: { sourceId: source.id, url: signal.url } })
+            : await prisma.signal.findFirst({
+                where: { sourceId: source.id, rawText: signal.rawText },
+              });
 
-      for (const signal of signals) {
-        const existing = signal.url
-          ? await prisma.signal.findFirst({ where: { sourceId: source.id, url: signal.url } })
-          : await prisma.signal.findFirst({
-              where: { sourceId: source.id, rawText: signal.rawText },
-            });
+          if (existing) continue;
 
-        if (existing) continue;
+          const created = await prisma.signal.create({
+            data: {
+              regionId: region.id,
+              sourceId: source.id,
+              rawText: signal.rawText,
+              url: signal.url,
+              timestamp: signal.timestamp,
+              capturedVia: "automated",
+            },
+          });
 
-        const created = await prisma.signal.create({
-          data: {
-            regionId: region.id,
-            sourceId: source.id,
-            rawText: signal.rawText,
-            url: signal.url,
-            timestamp: signal.timestamp,
-            capturedVia: "automated",
-          },
-        });
+          // Classify against the region's existing theme pool. Best-effort —
+          // an unclassified signal (themeId null) still exists and can be
+          // classified later; don't let one bad classification fail the pull.
+          try {
+            const themeId = await classifySignal(region.id, signal.rawText);
+            await prisma.signal.update({ where: { id: created.id }, data: { themeId } });
+          } catch (classifyErr) {
+            console.error(`Classification failed for signal ${created.id}:`, classifyErr);
+          }
 
-        // Classify against the region's existing theme pool. Best-effort —
-        // an unclassified signal (themeId null) still exists and can be
-        // classified later; don't let one bad classification fail the pull.
-        try {
-          const themeId = await classifySignal(region.id, signal.rawText);
-          await prisma.signal.update({ where: { id: created.id }, data: { themeId } });
-        } catch (classifyErr) {
-          console.error(`Classification failed for signal ${created.id}:`, classifyErr);
+          inserted++;
         }
 
-        inserted++;
+        return [source.name, { pulled: signals.length, inserted }] as const;
+      } catch (err) {
+        return [
+          source.name,
+          { pulled: 0, inserted: 0, error: err instanceof Error ? err.message : String(err) },
+        ] as const;
       }
+    })
+  );
 
-      results[source.name] = { pulled: signals.length, inserted };
-    } catch (err) {
-      results[source.name] = {
-        pulled: 0,
-        inserted: 0,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
+  const results = Object.fromEntries(entries);
 
   return NextResponse.json({ region: region.name, sources: results });
 }

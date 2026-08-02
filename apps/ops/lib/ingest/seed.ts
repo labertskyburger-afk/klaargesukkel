@@ -109,6 +109,28 @@ export async function ensureSeed() {
     });
   }
 
+  const redditSourceName = "Reddit (r/CapeTown, r/southafrica)";
+  const existingReddit = await prisma.source.findFirst({
+    where: { regionId: region.id, name: redditSourceName },
+  });
+  if (!existingReddit) {
+    await prisma.source.create({
+      data: {
+        regionId: region.id,
+        type: "reddit",
+        name: redditSourceName,
+        // Inactive until REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET are set on
+        // the apps/ops Vercel project. Per EYESPY.md, highest-priority
+        // source — least filtered, people describing their own problem in
+        // their own words. Kept to a broad "Durbanville" query rather than
+        // pulling entire subreddit feeds, so classification isn't drowned
+        // in general Cape Town chatter.
+        active: false,
+        config: { subreddits: ["CapeTown", "southafrica"], query: "Durbanville" },
+      },
+    });
+  }
+
   // Tracked Facebook groups for the weekly manual-capture workflow — name/
   // label only, per EYESPY.md (never scraped, just used to tag uploads).
   const trackedGroups = ["Durbanville Mammas", "Durbanville"];
