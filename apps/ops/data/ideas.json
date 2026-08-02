@@ -90,7 +90,7 @@
     "status": "Live",
     "priority": "Medium",
     "description": "Demand-signal research tool — reads compliant sources (Reddit API, search API, Google Places reviews, RSS, open data, podcast) plus weekly manual Facebook Group screenshot capture for a region, tracks recurring themes over time, surfaces trends to feed product ideation.",
-    "location": "apps/ops (/eyespy, /eyespy/[themeId], /eyespy/capture, /eyespy/sources), this repo — live and pulling real signals from 9 sources: IOL RSS, GroundUp Q&A RSS, GroundUp News RSS, Daily Maverick RSS, CapeTalk consumer podcast, Cape Town Service Requests (ArcGIS), Google Search, Brave Search, plus manual Facebook Group capture. Reddit built but blocked on an account hold (see next steps). Google Places and Google Trends still open.",
+    "location": "apps/ops (/eyespy, /eyespy/[themeId], /eyespy/capture, /eyespy/sources), this repo — live and pulling real signals from 10 sources: IOL RSS, GroundUp Q&A RSS, GroundUp News RSS, Daily Maverick RSS, CapeTalk consumer podcast, Cape Town Service Requests (ArcGIS), Google Search, Brave Search, Google Places (business reviews), plus manual Facebook Group capture. Every signal is classified demand/supply/unclear, with trend/volume counting demand only. Reddit built but blocked on an account hold (see next steps). Google Trends alpha still open (low priority).",
     "docs": "EYESPY.md",
     "nextSteps": [
       {
@@ -140,9 +140,9 @@
         "priority": "Low"
       },
       {
-        "step": "Wire Places into lib/ingest/ once the API key lands (Search and Reddit are done — Google/Brave Search live 2026-08-02, Reddit built and wired, just blocked on the account hold above), and write a Claude-authored per-period digest (DigestReport) to complement the structured dashboard",
+        "step": "Write a Claude-authored per-period digest (DigestReport) to complement the structured dashboard — the only remaining item from EYESPY.md's original build list. All sources are now wired: RSS x5 (incl. CapeTalk podcast), ArcGIS, Google/Brave Search, Google Places (live 2026-08-02, 5km radius around Durbanville, plumber/electrician/locksmith/painter/general_contractor reviews), and Reddit (built, blocked on account hold)",
         "owner": "Claude Code",
-        "waitingOn": "Google Places API key above",
+        "waitingOn": "",
         "priority": "Medium"
       }
     ],

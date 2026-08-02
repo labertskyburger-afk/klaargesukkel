@@ -31,6 +31,22 @@ export type SearchSourceConfig = {
   queries: string[];
 };
 
+export type PlacesSourceConfig = {
+  // Durbanville radius search — per EYESPY.md, the most structurally
+  // geo-native source (Places has native radius search, unlike most forum
+  // content). Pulls reviews for businesses matching placeTypes within
+  // radiusMeters of lat/lng, scanning for complaint/gap language ("wish
+  // there was...", "no one offers..."). Reviewer names/photos are never
+  // stored — only review text, same de-identification principle as
+  // manual-capture screenshots. Credentials come from GOOGLE_PLACES_API_KEY
+  // env var, never stored in this config.
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+  placeTypes: string[];
+  maxResultCount?: number; // default 20, Google's per-request cap
+};
+
 export type RedditSourceConfig = {
   // Subreddits to search within, e.g. ["CapeTown", "southafrica"] — per
   // EYESPY.md, official API only, read-only, no scraping outside it.

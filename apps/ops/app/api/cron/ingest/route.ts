@@ -5,10 +5,12 @@ import { pullRss } from "@/lib/ingest/rss";
 import { pullArcGis } from "@/lib/ingest/arcgis";
 import { pullSearch } from "@/lib/ingest/search";
 import { pullReddit } from "@/lib/ingest/reddit";
+import { pullPlaces } from "@/lib/ingest/places";
 import { classifySignal } from "@/lib/ingest/classify";
 import type {
   ArcGisSourceConfig,
   NormalizedSignal,
+  PlacesSourceConfig,
   RedditSourceConfig,
   RssSourceConfig,
   SearchSourceConfig,
@@ -65,6 +67,8 @@ async function pullForSource(source: {
       return pullSearch(source.config as SearchSourceConfig);
     case "reddit":
       return pullReddit(source.config as RedditSourceConfig);
+    case "places":
+      return pullPlaces(source.config as PlacesSourceConfig);
     default:
       return [];
   }

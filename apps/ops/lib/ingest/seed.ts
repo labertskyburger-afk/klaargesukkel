@@ -152,6 +152,34 @@ export async function ensureSeed() {
     });
   }
 
+  const placesSourceName = "Google Places (business reviews)";
+  const existingPlaces = await prisma.source.findFirst({
+    where: { regionId: region.id, name: placesSourceName },
+  });
+  if (!existingPlaces) {
+    await prisma.source.create({
+      data: {
+        regionId: region.id,
+        type: "places",
+        name: placesSourceName,
+        // Active immediately — Albert already has GOOGLE_PLACES_API_KEY set.
+        // Per EYESPY.md, the most structurally geo-native source (native
+        // radius search, unlike forum content). Reviews of existing
+        // businesses skew "supply" by nature, but occasionally surface
+        // genuine gap-in-market language ("wish there was...") — the
+        // demand/supply classifier sorts that out, same as every other
+        // source, no special-casing needed here.
+        active: true,
+        config: {
+          lat: -33.8304,
+          lng: 18.6497,
+          radiusMeters: 5000,
+          placeTypes: ["plumber", "electrician", "locksmith", "painter", "general_contractor"],
+        },
+      },
+    });
+  }
+
   // Tracked Facebook groups for the weekly manual-capture workflow — name/
   // label only, per EYESPY.md (never scraped, just used to tag uploads).
   const trackedGroups = ["Durbanville Mammas", "Durbanville"];
