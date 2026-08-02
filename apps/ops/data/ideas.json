@@ -157,17 +157,10 @@
     "docs": "EYESPY.md",
     "nextSteps": [
       {
-        "step": "Add ANTHROPIC_API_KEY and CRON_SECRET to apps/ops's Vercel env vars",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "High",
-        "detail": [
-          "Get an Anthropic API key: go to console.anthropic.com, log in, go to API Keys, click Create Key, copy it.",
-          "In Vercel, open the apps/ops project > Settings > Environment Variables.",
-          "Add ANTHROPIC_API_KEY with the value you just copied.",
-          "Add CRON_SECRET with any random string you make up (used to authenticate the scheduled ingest job, not a real account credential).",
-          "Enable both for Production, then redeploy so they take effect."
-        ]
+        "step": "Confirm the daily cron ingest actually runs end-to-end now that ANTHROPIC_API_KEY and CRON_SECRET are set — a bug was found and fixed 2026-08-02 where apps/ops's login middleware was redirecting every /api/cron/ingest call (including Vercel Cron's own scheduled calls) to /login before it ever reached the route's CRON_SECRET check, so the job likely never ran even once before this fix",
+        "owner": "Claude Code",
+        "waitingOn": "next scheduled cron run (06:00 daily) or a manual trigger to verify",
+        "priority": "High"
       },
       {
         "step": "Find the Cape Town Service Requests ArcGIS FeatureServer query URL (dataset confirmed real, no API key needed — just needs a human browser, Claude Code's fetch hit 404s on the ArcGIS Hub site) and set it as the source's queryUrl, then flip that source active",

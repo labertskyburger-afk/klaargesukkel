@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 // Session-cookie auth gate for the whole ops app (clients, projects, eyespy).
 // Requires ADMIN_USER, ADMIN_PASSWORD, and SESSION_SECRET as Vercel env vars —
 // without SESSION_SECRET set, no session cookie can ever validate (fails closed).
-const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout"];
+// /api/cron is excluded because Vercel Cron calls it directly with no session
+// cookie — it has its own CRON_SECRET bearer-token check in the route handler.
+const PUBLIC_PATHS = ["/login", "/api/login", "/api/logout", "/api/cron"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

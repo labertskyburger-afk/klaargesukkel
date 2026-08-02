@@ -127,12 +127,19 @@ merge in "Current state" above. Full spec in EYESPY.md. What's actually working:
   Blob: the screenshot is processed entirely in-memory in one request, never persisted, which
   more strongly guarantees "discard the raw screenshot" than a storage-plus-cleanup-job would
 
+**Update 2026-08-02:** `ANTHROPIC_API_KEY` and `CRON_SECRET` are now set on the `apps/ops`
+Vercel project. While verifying this, found and fixed a real bug: `apps/ops/middleware.ts`'s
+session-cookie login gate had no exclusion for `/api/cron`, so it was redirecting every call to
+`/api/cron/ingest` — including Vercel Cron's own scheduled calls — to `/login` before the
+route's own `CRON_SECRET` bearer-token check ever ran. The daily ingest cron had likely never
+actually executed even once. Fixed by adding `/api/cron` to `middleware.ts`'s `PUBLIC_PATHS`
+(the route's own secret check still protects it — `/api/eyespy/capture` was left alone since
+that one's correctly meant to run behind the login session, not independently). Still needs a
+real run to confirm end-to-end (next scheduled 06:00 run, or a manual trigger).
+
 **Still blocked on Albert** (mirrored in `apps/ops/data/ideas.json`'s EyeSpy entry — keep
 both in sync if any of these change):
 
-- `ANTHROPIC_API_KEY`, `CRON_SECRET` env vars on the `apps/ops` Vercel project (classification
-  and manual capture can't run without the first; the cron endpoint has no auth without the
-  second — low risk but cheap to close)
 - The Cape Town Service Requests ArcGIS FeatureServer query URL — the dataset is confirmed
   real and needs no API key, but the query endpoint itself needs a human with a real browser
   to find (Claude Code's fetch tooling hit 404s on the ArcGIS Hub site). Once you have it, it
