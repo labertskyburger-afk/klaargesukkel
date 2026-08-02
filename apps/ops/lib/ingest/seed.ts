@@ -30,20 +30,29 @@ export async function ensureSeed() {
     });
   }
 
-  const rssSourceName = "IOL Western Cape RSS";
-  const existingRss = await prisma.source.findFirst({
-    where: { regionId: region.id, name: rssSourceName },
-  });
-  if (!existingRss) {
-    await prisma.source.create({
-      data: {
-        regionId: region.id,
-        type: "rss",
-        name: rssSourceName,
-        active: true,
-        config: { feedUrl: "https://rss.iol.io/iol/news/south-africa/western-cape" },
-      },
-    });
+  // RSS/podcast-RSS sources — podcast feeds are just RSS with iTunes
+  // extensions, and the CapeTalk feed uses standard <title>/<description>
+  // per item, so pullRss handles it unchanged (episode titles/descriptions
+  // are enough to classify, per EYESPY.md — only build a transcript
+  // pipeline if that proves too thin).
+  const rssSources: { name: string; feedUrl: string }[] = [
+    { name: "IOL Western Cape RSS", feedUrl: "https://rss.iol.io/iol/news/south-africa/western-cape" },
+    { name: "GroundUp Q&A RSS", feedUrl: "https://groundup.org.za/qanda/rss/" },
+    { name: "GroundUp News RSS", feedUrl: "https://groundup.org.za/sitenews/rss/" },
+    { name: "Daily Maverick RSS", feedUrl: "https://www.dailymaverick.co.za/dmrss" },
+    {
+      name: "CapeTalk: Consumer Talk with Wendy Knowler (podcast)",
+      feedUrl:
+        "https://www.omnycontent.com/d/playlist/5dcefa8e-00a9-4595-8ce1-a4ab0080f142/1df82789-1c5e-420b-8aa0-a6dd00f1f24f/5c722964-f3dd-4a32-b2dc-a97a00ebdd50/podcast.rss",
+    },
+  ];
+  for (const { name, feedUrl } of rssSources) {
+    const existing = await prisma.source.findFirst({ where: { regionId: region.id, name } });
+    if (!existing) {
+      await prisma.source.create({
+        data: { regionId: region.id, type: "rss", name, active: true, config: { feedUrl } },
+      });
+    }
   }
 
   const arcgisSourceName = "Cape Town Service Requests (open data)";
