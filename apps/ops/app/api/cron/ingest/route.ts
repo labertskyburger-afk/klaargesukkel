@@ -17,6 +17,37 @@ import type {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Classification is a live Claude call per signal — with several sources
+// now active (RSS feeds alone can have 50-100 items each), a first/bulk run
+// could mean hundreds of sequential calls, well past any function timeout.
+// Cap how many get classified per run; anything left over stays
+// unclassified (themeId null) and gets picked up on the next run — EYESPY.md
+// already treats that as an acceptable, temporary state, not a failure.
+const CLASSIFY_CAP_PER_RUN = 40;
+const CLASSIFY_CONCURRENCY = 5;
+
+async function classifyInBatches(
+  regionId: string,
+  signals: { id: string; rawText: string }[]
+): Promise<number> {
+  let classified = 0;
+  for (let i = 0; i < signals.length; i += CLASSIFY_CONCURRENCY) {
+    const batch = signals.slice(i, i + CLASSIFY_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (signal) => {
+        try {
+          const themeId = await classifySignal(regionId, signal.rawText);
+          await prisma.signal.update({ where: { id: signal.id }, data: { themeId } });
+          classified++;
+        } catch (err) {
+          console.error(`Classification failed for signal ${signal.id}:`, err);
+        }
+      })
+    );
+  }
+  return classified;
+}
+
 async function pullForSource(source: {
   id: string;
   type: string;
@@ -51,10 +82,9 @@ export async function GET(req: NextRequest) {
     where: { regionId: region.id, active: true },
   });
 
-  // Sources run in parallel — with several external APIs now active (RSS,
-  // ArcGIS, Google/Brave Search, each doing multiple requests), running them
-  // one at a time risked the total exceeding Vercel's 60s function limit,
-  // silently starving whichever source came last in the loop.
+  // Phase 1: pull + dedupe + insert, sources in parallel, no classification
+  // inline — this stays fast (bounded by external API + DB latency) no
+  // matter how many new items land.
   const entries = await Promise.all(
     sources.map(async (source) => {
       try {
@@ -70,7 +100,7 @@ export async function GET(req: NextRequest) {
 
           if (existing) continue;
 
-          const created = await prisma.signal.create({
+          await prisma.signal.create({
             data: {
               regionId: region.id,
               sourceId: source.id,
@@ -80,16 +110,6 @@ export async function GET(req: NextRequest) {
               capturedVia: "automated",
             },
           });
-
-          // Classify against the region's existing theme pool. Best-effort —
-          // an unclassified signal (themeId null) still exists and can be
-          // classified later; don't let one bad classification fail the pull.
-          try {
-            const themeId = await classifySignal(region.id, signal.rawText);
-            await prisma.signal.update({ where: { id: created.id }, data: { themeId } });
-          } catch (classifyErr) {
-            console.error(`Classification failed for signal ${created.id}:`, classifyErr);
-          }
 
           inserted++;
         }
@@ -106,5 +126,22 @@ export async function GET(req: NextRequest) {
 
   const results = Object.fromEntries(entries);
 
-  return NextResponse.json({ region: region.name, sources: results });
+  // Phase 2: classify a capped batch of unclassified signals (oldest first,
+  // across all sources) — see CLASSIFY_CAP_PER_RUN comment above.
+  const unclassified = await prisma.signal.findMany({
+    where: { regionId: region.id, themeId: null },
+    orderBy: { createdAt: "asc" },
+    take: CLASSIFY_CAP_PER_RUN,
+    select: { id: true, rawText: true },
+  });
+  const classified = await classifyInBatches(region.id, unclassified);
+  const remainingUnclassified = await prisma.signal.count({
+    where: { regionId: region.id, themeId: null },
+  });
+
+  return NextResponse.json({
+    region: region.name,
+    sources: results,
+    classification: { classifiedThisRun: classified, stillUnclassified: remainingUnclassified },
+  });
 }
