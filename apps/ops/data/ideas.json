@@ -152,9 +152,15 @@
         "priority": "High"
       },
       {
-        "step": "Generate the first real digest — click 'Regenerate digest now' on /eyespy/digest, after the theme-merge cleanup above (Anthropic credits confirmed topped up and classification backlog confirmed at zero 2026-08-03)",
+        "step": "Found + fixed 2026-08-03: hundreds of themes turned out to be general South African news (\"geopolitics and international conflict\", \"judicial accountability and government ethics\") from the broad RSS sources (IOL, Daily Maverick, GroundUp News), classified as if it were local Durbanville demand — spotted via the category filter list on /eyespy ballooning to hundreds of near-random categories. classifySignal() now judges relevance first (new signalType value \"irrelevant\") before theme attach/create, so this stops going forward. Built /eyespy/purge-themes for the existing backlog: Claude flags off-topic themes in reviewable batches, confirming deletes the theme and its signals. Migration apps/ops/prisma/migrations/20260803140000_add_irrelevant_signal_type/migration.sql needs hand-applying via the Query tool first (single statement: ALTER TYPE \"SignalType\" ADD VALUE 'irrelevant')",
+        "owner": "Claude Code",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Run both cleanup tools, then generate the first real digest: /eyespy/merge-themes (duplicate themes from the earlier classification-cap bug), then /eyespy/purge-themes (off-topic news themes from the RSS relevance bug), then 'Regenerate digest now' on /eyespy/digest. Doing this in order matters — a digest scored against fragmented or off-topic themes would misrepresent what's actually a gap",
         "owner": "Albert",
-        "waitingOn": "Theme merge cleanup above",
+        "waitingOn": "",
         "priority": "High"
       }
     ],
