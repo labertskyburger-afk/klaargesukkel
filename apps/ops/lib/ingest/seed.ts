@@ -174,7 +174,11 @@ export async function ensureSeed() {
           lat: -33.8304,
           lng: 18.6497,
           radiusMeters: 5000,
-          placeTypes: ["plumber", "electrician", "locksmith", "painter", "general_contractor"],
+          // "general_contractor" is NOT a valid Places API (New) type
+          // (confirmed 2026-08-03 — every request was failing with
+          // "Unsupported types: general_contractor") — dropped it, the
+          // remaining four are confirmed working with real reviews.
+          placeTypes: ["plumber", "electrician", "locksmith", "painter"],
         },
       },
     });
