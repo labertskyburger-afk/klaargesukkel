@@ -51,11 +51,20 @@ export async function classifySignal(
   regionId: string,
   rawText: string
 ): Promise<ClassifyResult> {
+  // No recency cap here (was `take: 100`, found 2026-08-03 as the cause of
+  // runaway theme fragmentation) — with hundreds of themes now existing,
+  // capping to the 100 most-recently-seen made older themes invisible to
+  // new classification calls, so instead of attaching to an existing
+  // theme, Claude kept creating duplicates. EYESPY.md's explicit design is
+  // "Claude's theme classification... is enough at this scale, no ML
+  // clustering pipeline" — that only holds if it can actually see every
+  // theme. A high ceiling (not fully unbounded) guards against a truly
+  // pathological case without reintroducing the bug at realistic scale.
   const existingThemes = await prisma.theme.findMany({
     where: { regionId, status: "active" },
     select: { id: true, label: true, description: true, category: true },
     orderBy: { lastSeenAt: "desc" },
-    take: 100,
+    take: 2000,
   });
 
   const themeList =
