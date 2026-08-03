@@ -146,9 +146,15 @@
         "priority": "High"
       },
       {
-        "step": "Generate the first real digest — click 'Regenerate digest now' on /eyespy/digest once the Anthropic credits blocker above is confirmed cleared and the classification backlog has caught up (check /eyespy/sources' Unclassified column is at or near zero first — a digest scored against a partial backlog would undercount whatever's still stuck)",
+        "step": "Found + fixed 2026-08-03: classifySignal() only showed Claude the 100 most-recently-seen themes as attach candidates, so with hundreds of themes now existing, older ones became invisible and kept getting duplicated instead of matched. Fixed (cap raised to 2000) — stops new duplicates, but the existing fragmentation needs a one-time cleanup. Built /eyespy/merge-themes: Claude proposes duplicate groups, Albert reviews/unchecks, then applying reassigns signals to a survivor theme and deletes the rest. Do this before generating the first digest — a digest scored against fragmented themes would split real demand across many under-confidence Watch entries instead of one solid Clear gap",
         "owner": "Albert",
-        "waitingOn": "Anthropic credits blocker above",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Generate the first real digest — click 'Regenerate digest now' on /eyespy/digest, after the theme-merge cleanup above (Anthropic credits confirmed topped up and classification backlog confirmed at zero 2026-08-03)",
+        "owner": "Albert",
+        "waitingOn": "Theme merge cleanup above",
         "priority": "High"
       }
     ],
