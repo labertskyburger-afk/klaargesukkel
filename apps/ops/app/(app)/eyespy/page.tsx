@@ -228,7 +228,11 @@ export default async function EyeSpyPage({
         so the always-live dashboard and the periodic write-up tell the same story. Counts here
         only include "demand" signals — "supply" signals (businesses/ads, including SEO copy
         phrased as a question) feed the supply ratio but not the volume/trend numbers. See
-        EYESPY.md for the full spec.
+        EYESPY.md for the full spec.{" "}
+        <Link href="/eyespy/merge-themes" className="text-teal hover:underline">
+          Merge duplicate themes
+        </Link>{" "}
+        if the list above looks fragmented.
       </p>
     </main>
   );
