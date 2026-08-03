@@ -20,11 +20,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!region) {
-    return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
-  }
+  try {
+    const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
+    if (!region) {
+      return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
+    }
 
-  const digest = await generateDigest(region.id, "scheduled");
-  return NextResponse.json({ digestId: digest.id });
+    const digest = await generateDigest(region.id, "scheduled");
+    return NextResponse.json({ digestId: digest.id });
+  } catch (err) {
+    console.error("generateDigest (scheduled) failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }

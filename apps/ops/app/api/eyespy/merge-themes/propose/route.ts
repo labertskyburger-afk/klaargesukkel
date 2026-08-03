@@ -6,11 +6,19 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST() {
-  const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!region) {
-    return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
-  }
+  try {
+    const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
+    if (!region) {
+      return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
+    }
 
-  const groups = await proposeThemeMerges(region.id);
-  return NextResponse.json({ groups });
+    const { groups, errors } = await proposeThemeMerges(region.id);
+    return NextResponse.json({ groups, errors });
+  } catch (err) {
+    console.error("proposeThemeMerges failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }

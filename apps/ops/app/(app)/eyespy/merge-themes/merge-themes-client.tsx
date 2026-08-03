@@ -24,11 +24,13 @@ export default function MergeThemesClient() {
     errors: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanErrors, setScanErrors] = useState<string[]>([]);
 
   async function findDuplicates() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setScanErrors([]);
     try {
       const res = await fetch("/api/eyespy/merge-themes/propose", { method: "POST" });
       const data = await res.json();
@@ -36,6 +38,7 @@ export default function MergeThemesClient() {
       const groups: MergeGroupProposal[] = data.groups;
       setProposals(groups);
       setSelected(new Set(groups.map((_, i) => i)));
+      setScanErrors(data.errors ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -113,6 +116,22 @@ export default function MergeThemesClient() {
           <Link href="/eyespy" className="mt-3 inline-block text-xs text-teal hover:underline">
             ← Back to themes
           </Link>
+        </div>
+      )}
+
+      {proposals && scanErrors.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-amber/30 bg-amber/10 p-4">
+          <p className="text-xs font-medium text-amber">
+            {scanErrors.length} categor{scanErrors.length === 1 ? "y" : "ies"} failed to scan —
+            results below are partial, safe to apply what's shown and re-run later for the rest.
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {scanErrors.map((e, i) => (
+              <li key={i} className="text-xs text-amber/80">
+                {e}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

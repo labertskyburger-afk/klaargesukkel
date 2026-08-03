@@ -11,11 +11,19 @@ export const maxDuration = 60;
 // header check needed beyond the ops app's own session-cookie middleware,
 // which already gates every route under /eyespy and /api/eyespy.
 export async function POST() {
-  const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!region) {
-    return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
-  }
+  try {
+    const region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
+    if (!region) {
+      return NextResponse.json({ error: "No region configured yet" }, { status: 400 });
+    }
 
-  const digest = await generateDigest(region.id, "manual");
-  return NextResponse.json({ digestId: digest.id });
+    const digest = await generateDigest(region.id, "manual");
+    return NextResponse.json({ digestId: digest.id });
+  } catch (err) {
+    console.error("generateDigest failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }

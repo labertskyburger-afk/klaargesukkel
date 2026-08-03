@@ -56,27 +56,13 @@ export type MergeGroupProposal = {
   reasoning: string;
 };
 
-// One-time cleanup tool, not part of the regular ingest pipeline — built
-// 2026-08-03 after fixing the theme-fragmentation bug in classify.ts
-// (a 100-theme recency cap made older themes invisible during
-// classification, so duplicates kept getting created instead of attached).
-// That fix stops new duplicates; this proposes merges for the hundreds
-// already created. Review-then-apply, not automatic — see
-// applyThemeMerges below.
-export async function proposeThemeMerges(regionId: string): Promise<MergeGroupProposal[]> {
-  const themes = await prisma.theme.findMany({
-    where: { regionId, status: "active" },
-    select: { id: true, label: true, description: true, category: true },
-  });
+type ThemeRow = { id: string; label: string; description: string | null; category: string | null };
 
+async function proposeMergesWithin(
+  themes: ThemeRow[],
+  countByThemeId: Map<string, number>
+): Promise<MergeGroupProposal[]> {
   if (themes.length < 2) return [];
-
-  const signalCounts = await prisma.signal.groupBy({
-    by: ["themeId"],
-    where: { themeId: { in: themes.map((t) => t.id) } },
-    _count: true,
-  });
-  const countByThemeId = new Map(signalCounts.map((s) => [s.themeId as string, s._count]));
 
   const themeList = themes
     .map(
@@ -93,7 +79,7 @@ export async function proposeThemeMerges(regionId: string): Promise<MergeGroupPr
     messages: [
       {
         role: "user",
-        content: `Here are all ${themes.length} existing themes for this region:\n\n${themeList}\n\nIdentify groups of themes that are clearly duplicates or trivial rewordings of the same underlying need, per the tool's instructions. Be conservative — only merge when you're confident they're the same thing, not just related or same category.`,
+        content: `Here are ${themes.length} existing themes for this region (already narrowed to one category, or "uncategorized"):\n\n${themeList}\n\nIdentify groups of themes that are clearly duplicates or trivial rewordings of the same underlying need, per the tool's instructions. Be conservative — only merge when you're confident they're the same thing, not just related.`,
       },
     ],
   });
@@ -101,7 +87,7 @@ export async function proposeThemeMerges(regionId: string): Promise<MergeGroupPr
   const toolUse = response.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
   );
-  if (!toolUse) throw new Error("proposeThemeMerges: model did not return a tool call");
+  if (!toolUse) throw new Error("model did not return a tool call");
 
   const input = toolUse.input as {
     merge_groups: {
@@ -125,6 +111,64 @@ export async function proposeThemeMerges(regionId: string): Promise<MergeGroupPr
       canonicalCategory: g.canonical_category,
       reasoning: g.reasoning,
     }));
+}
+
+// One-time cleanup tool, not part of the regular ingest pipeline — built
+// 2026-08-03 after fixing the theme-fragmentation bug in classify.ts
+// (a 100-theme recency cap made older themes invisible during
+// classification, so duplicates kept getting created instead of attached).
+// That fix stops new duplicates; this proposes merges for the hundreds
+// already created. Review-then-apply, not automatic — see
+// applyThemeMerges below.
+//
+// Chunked by category (parallel calls) rather than one call across every
+// theme — with hundreds of themes, a single call risked Vercel's 60s
+// function timeout and a large-enough merge_groups response to strain
+// max_tokens. Duplicates almost always share a category already (the
+// classifier assigns one alongside label/description), so this misses
+// only cross-category duplicates, which are rare in practice.
+export async function proposeThemeMerges(
+  regionId: string
+): Promise<{ groups: MergeGroupProposal[]; errors: string[] }> {
+  const themes = await prisma.theme.findMany({
+    where: { regionId, status: "active" },
+    select: { id: true, label: true, description: true, category: true },
+  });
+
+  if (themes.length < 2) return { groups: [], errors: [] };
+
+  const signalCounts = await prisma.signal.groupBy({
+    by: ["themeId"],
+    where: { themeId: { in: themes.map((t) => t.id) } },
+    _count: true,
+  });
+  const countByThemeId = new Map(signalCounts.map((s) => [s.themeId as string, s._count]));
+
+  const byCategory = new Map<string, ThemeRow[]>();
+  for (const t of themes) {
+    const key = t.category ?? "(uncategorized)";
+    const bucket = byCategory.get(key) ?? [];
+    bucket.push(t);
+    byCategory.set(key, bucket);
+  }
+
+  const results = await Promise.all(
+    Array.from(byCategory.entries()).map(async ([category, bucket]) => {
+      try {
+        return { groups: await proposeMergesWithin(bucket, countByThemeId), error: null };
+      } catch (err) {
+        return {
+          groups: [] as MergeGroupProposal[],
+          error: `Category "${category}" (${bucket.length} themes): ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    })
+  );
+
+  return {
+    groups: results.flatMap((r) => r.groups),
+    errors: results.map((r) => r.error).filter((e): e is string => e !== null),
+  };
 }
 
 export type ConfirmedMergeGroup = {

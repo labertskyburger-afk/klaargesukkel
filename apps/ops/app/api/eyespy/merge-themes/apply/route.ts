@@ -10,6 +10,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing groups array" }, { status: 400 });
   }
 
-  const result = await applyThemeMerges(body.groups);
-  return NextResponse.json(result);
+  try {
+    const result = await applyThemeMerges(body.groups);
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("applyThemeMerges failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }
