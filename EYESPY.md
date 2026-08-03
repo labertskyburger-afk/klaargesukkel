@@ -204,14 +204,50 @@ running on an arbitrary schedule that might land before or after the actual capt
    bucket (with a `WHERE signal_type = 'demand'` on the trend query) — no ML clustering
    pipeline, no separate analytics tool. Don't build a rollup/materialized-view table until
    querying this live is actually slow, not before.
-5. **Claude writes the digest**: for the top themes by a combination of volume and trend
-   (a theme that's small but accelerating matters as much as one that's just consistently
-   large), a short write-up with 2-3 supporting example signals, and a flag for whether it
-   looks like a viable "practical, smart" Klaargesukkel-shaped solution versus noise or
-   something too big/regulated to touch.
-6. **Output**: both a written digest and a structured, filterable view — see Output below —
+5. **Compute a `gap_score` per theme — added 2026-08-02, replaces the vague "volume+trend
+   blend."** Volume and trend alone conflate "popular topic" with "actual opportunity" — the
+   Plumbing theme proved this (high volume, 100% businesses advertising, zero real gap). A
+   theme is a genuine opportunity when demand is meaningful, relatively unmet, and not
+   fading. Computed at query/digest time (plain SQL + arithmetic, not stored, same
+   no-rollup-table-until-slow principle as trend):
+   - `demand_volume` — recency-weighted count of `demand`-tagged signals (recent periods
+     weighted higher than old ones, simple decay is enough, no need for anything fancier).
+   - `trend_multiplier` — rising ×1.5, steady ×1.0, falling ×0.7, dormant themes excluded
+     from scoring entirely (they still exist in the data, just don't surface as an
+     opportunity).
+   - `supply_ratio` — demand signals ÷ (demand + supply signals) for the theme. High ratio =
+     little competition = bigger gap. Low ratio = saturated = not really a gap, just a
+     popular category.
+   - `gap_score = demand_volume × trend_multiplier × supply_ratio`.
+   - `confidence` — themes below a minimum signal count (start at 5, tune once real data
+     volume is seen) are flagged low-confidence and held out of top rankings regardless of
+     score, so a 3-signal theme can't outrank a 40-signal one on a fluke.
+6. **Claude writes the digest, organized into three buckets, not one flat ranked list**:
+   - **Clear gaps** — top themes by `gap_score`, confidence permitting. Each gets: the score,
+     2-3 supporting `demand` example signals, a plain-English "why this looks like a gap"
+     (what the supply_ratio and trend say), and the existing "practical, smart,
+     Klaargesukkel-shaped solution, or too big/regulated/niche to touch" judgment call.
+   - **Rising but crowded** — real, growing demand, but low `supply_ratio` (plenty of
+     existing competitors). Not zero-opportunity, but the digest should say so explicitly and
+     note it'd need a differentiation angle, not a straight build.
+   - **Watch list** — themes below the confidence threshold. Worth naming so Albert knows
+     they exist and can sanity-check against his own knowledge, but explicitly not
+     recommendations yet.
+   - **Cross-theme rollup note** — as a last step, Claude scans the Clear gaps + Rising
+     themes for obvious overlap (e.g. "plumber," "geyser repair," and "leak detection" might
+     really be one bigger "home emergency repairs" opportunity) and calls it out as a short
+     paragraph if found. Not a rigid structural feature — just an instruction in the digest
+     prompt, skip it if nothing overlaps.
+   - Also note what got filtered out and why (e.g. "N supply-only themes and N low-confidence
+     themes excluded, see the dashboard's Watch/supply filters if curious") — a digest that
+     silently drops data is less trustworthy than one that says what it left out.
+7. **Output**: both a written digest and a structured, filterable view — see Output below —
    viewable at `ops.klaargesukkel.com/eyespy` (same session login as the rest of the ops
-   app), generated on the weekly rhythm described above.
+   app). Digest generation does **not** depend on the Google Places source being wired in —
+   it should run against whatever sources are live at the time, same as the dashboard.
+   Generated on the weekly Wednesday rhythm as a baseline, plus an on-demand "regenerate now"
+   action in the dashboard — given how much volume is already flowing across 9 sources,
+   Albert shouldn't have to wait until Wednesday to get a fresh read.
 
 ## Output — "usable manner," not just a text dump
 
@@ -219,20 +255,23 @@ The point of tracking themes persistently (step 3-4 above) is to make trends vis
 just producible. The eyespy dashboard should be a real table/view, not only a wall of
 digest text:
 
-- A themes table sorted by what actually matters most right now (a blend of total volume and
-  trend direction — a small-but-rising theme surfacing near the top is more useful than a
-  flat sort by raw count), showing: theme label, category, total signal count, trend
-  indicator (↑ rising / → steady / ↓ falling / dormant) with the period-over-period delta,
-  first-seen and last-seen dates.
+- A themes table **default-sorted by `gap_score`** (added 2026-08-02, replaces the old vague
+  "volume+trend blend" sort — see Processing step 5 for the formula), showing: theme label,
+  category, gap_score, a bucket badge (Clear gap / Rising but crowded / Watch — same three
+  buckets as the digest, so the always-live dashboard and the periodic digest tell the same
+  story instead of using two different mental models), `demand` signal count, `supply_ratio`,
+  trend indicator (↑ rising / → steady / ↓ falling / dormant) with the period-over-period
+  delta, first-seen and last-seen dates.
 - Click into a theme to see its underlying example signals — de-identified text, source,
   link where one exists, date — so Albert can sanity-check what's actually driving a theme
   before acting on it.
 - A simple volume-over-time view per theme (a plain bar/line of signal count per period is
   enough — no need for anything fancier) so a trend is visible at a glance, not just implied
   by a number.
-- The written digest (step 5) stays as a complementary quick-read artifact, not a
-  replacement for the structured view — some sessions Albert will want to skim the narrative,
-  others he'll want to filter/drill into the table directly.
+- The written digest (Processing steps 5-6) stays as a complementary quick-read artifact, not
+  a replacement for the structured view — some sessions Albert will want to skim the
+  narrative, others he'll want to filter/drill into the table directly. Add a "Regenerate
+  digest now" action here too, per the cadence note in Processing step 7.
 - Filters worth having from the start: by category, by source (including "manual capture
   only" to see what the Facebook Group pass specifically surfaced), by date range, and by
   `signal_type` (added 2026-08-02) — default the themes table and volume/trend numbers to
@@ -261,8 +300,13 @@ digest text:
   results were 100% business ad copy classified as if it were demand; only `demand` signals
   should count toward a theme's volume/trend computation, see Data sources' search-API
   caveat above)
-- `DigestReport` — region_id, period, ranked_themes (JSON: theme_id, rank, trend direction,
-  period count, total count, example signals, "worth building?" flag), generated_at
+- `DigestReport` — region_id, period, generated_at, generated_by (`scheduled`/`manual`, added
+  2026-08-02 to support the on-demand regenerate action), ranked_themes (JSON: theme_id,
+  bucket [`clear_gap`/`rising_crowded`/`watch`], gap_score, supply_ratio, trend direction,
+  demand period count, demand total count, confidence, example signals, "worth building?"
+  flag), rollup_note (text, nullable — the cross-theme overlap paragraph, when found),
+  excluded_summary (text — what got filtered out and why, per the digest's "don't silently
+  drop data" rule)
 
 Raw screenshot images are **not** part of this data model as a persisted entity — they exist
 only transiently during the upload-and-extract step (see Manual capture workflow above).

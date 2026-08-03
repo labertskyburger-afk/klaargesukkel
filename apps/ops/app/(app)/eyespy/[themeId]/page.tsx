@@ -1,20 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { computeThemeTrend } from "@/lib/ingest/trends";
+import { computeThemeTrend, isoWeekLabel } from "@/lib/ingest/trends";
 
 export const dynamic = "force-dynamic";
 
 const WEEKS_SHOWN = 8;
-
-function isoWeekLabel(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
 
 export default async function ThemeDetailPage({
   params,

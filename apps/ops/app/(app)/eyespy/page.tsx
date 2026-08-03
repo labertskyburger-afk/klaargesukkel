@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { computeThemeTrend, type TrendDirection } from "@/lib/ingest/trends";
+import { computeThemeGapScore, type Bucket } from "@/lib/ingest/gapScore";
+import type { TrendDirection } from "@/lib/ingest/trends";
 
 export const dynamic = "force-dynamic";
-
-const trendRank: Record<TrendDirection, number> = {
-  rising: 0,
-  steady: 1,
-  falling: 2,
-  dormant: 3,
-};
 
 const trendLabel: Record<TrendDirection, string> = {
   rising: "↑ rising",
@@ -23,6 +17,30 @@ const trendStyle: Record<TrendDirection, string> = {
   steady: "bg-teal/10 text-teal",
   falling: "bg-fog/20 text-fog",
   dormant: "bg-ink/5 text-ink/40",
+};
+
+const bucketLabel: Record<Bucket, string> = {
+  clear_gap: "Clear gap",
+  rising_crowded: "Rising, crowded",
+  watch: "Watch",
+  dormant: "Dormant",
+};
+
+const bucketStyle: Record<Bucket, string> = {
+  clear_gap: "bg-teal/10 text-teal",
+  rising_crowded: "bg-amber/20 text-amber",
+  watch: "bg-fog/20 text-fog",
+  dormant: "bg-ink/5 text-ink/40",
+};
+
+// Bucket priority for the default sort — confidence-gated: a low-confidence
+// Watch theme can never outrank a confident Clear gap or Rising theme
+// regardless of raw gap_score, per EYESPY.md's Processing step 5.
+const bucketRank: Record<Bucket, number> = {
+  clear_gap: 0,
+  rising_crowded: 1,
+  watch: 2,
+  dormant: 3,
 };
 
 export default async function EyeSpyPage({
@@ -49,8 +67,8 @@ export default async function EyeSpyPage({
     orderBy: { lastSeenAt: "desc" },
   });
 
-  const trends = await Promise.all(themes.map((t) => computeThemeTrend(t.id)));
-  const trendByThemeId = new Map(trends.map((t) => [t.themeId, t]));
+  const scores = await Promise.all(themes.map((t) => computeThemeGapScore(t.id)));
+  const scoreByThemeId = new Map(scores.map((s) => [s.themeId, s]));
 
   const categories = Array.from(
     new Set(themes.map((t) => t.category).filter((c): c is string => !!c))
@@ -62,14 +80,17 @@ export default async function EyeSpyPage({
     : themes;
 
   const sorted = filtered.slice().sort((a, b) => {
-    const ta = trendByThemeId.get(a.id)!;
-    const tb = trendByThemeId.get(b.id)!;
-    const rankDiff = trendRank[ta.direction] - trendRank[tb.direction];
+    const sa = scoreByThemeId.get(a.id)!;
+    const sb = scoreByThemeId.get(b.id)!;
+    const rankDiff = bucketRank[sa.bucket] - bucketRank[sb.bucket];
     if (rankDiff !== 0) return rankDiff;
-    return tb.totalCount - ta.totalCount;
+    if (sa.bucket === "clear_gap" || sa.bucket === "rising_crowded") {
+      return sb.gapScore - sa.gapScore;
+    }
+    return sb.demandTotalCount - sa.demandTotalCount;
   });
 
-  const risingCount = trends.filter((t) => t.direction === "rising").length;
+  const clearGapCount = scores.filter((s) => s.bucket === "clear_gap").length;
 
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-14">
@@ -78,10 +99,16 @@ export default async function EyeSpyPage({
           <h1 className="text-3xl font-bold text-ink">EyeSpy</h1>
           <p className="mt-2 text-ink/60">
             {region.name} · {themes.length} theme{themes.length === 1 ? "" : "s"} tracked ·{" "}
-            {risingCount} rising this week
+            {clearGapCount} clear gap{clearGapCount === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/eyespy/digest"
+            className="whitespace-nowrap rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold text-ink/70 transition hover:bg-ink/5"
+          >
+            Digest
+          </Link>
           <Link
             href="/eyespy/sources"
             className="whitespace-nowrap rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold text-ink/70 transition hover:bg-ink/5"
@@ -129,16 +156,18 @@ export default async function EyeSpyPage({
             <tr className="border-b border-ink/10 bg-ink/5 text-xs uppercase tracking-wide text-ink/50">
               <th className="px-4 py-3">Theme</th>
               <th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3">Gap</th>
+              <th className="px-4 py-3">Gap score</th>
+              <th className="px-4 py-3">Supply ratio</th>
               <th className="px-4 py-3">Trend</th>
               <th className="px-4 py-3">This period</th>
               <th className="px-4 py-3">Total</th>
-              <th className="px-4 py-3">First seen</th>
               <th className="px-4 py-3">Last seen</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((theme) => {
-              const trend = trendByThemeId.get(theme.id)!;
+              const score = scoreByThemeId.get(theme.id)!;
               return (
                 <tr key={theme.id} className="border-b border-ink/5 last:border-0 hover:bg-sand/50">
                   <td className="px-4 py-3">
@@ -152,21 +181,28 @@ export default async function EyeSpyPage({
                   <td className="px-4 py-3 text-ink/60">{theme.category ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${trendStyle[trend.direction]}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${bucketStyle[score.bucket]}`}
                     >
-                      {trendLabel[trend.direction]}
+                      {bucketLabel[score.bucket]}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink/70">
-                    {trend.periodCount}
-                    {trend.priorCount > 0 && (
-                      <span className="text-ink/40"> (was {trend.priorCount})</span>
-                    )}
+                    {score.bucket === "dormant" ? "—" : score.gapScore.toFixed(1)}
                   </td>
-                  <td className="px-4 py-3 text-ink/70">{trend.totalCount}</td>
-                  <td className="px-4 py-3 text-ink/50">
-                    {theme.firstSeenAt.toISOString().slice(0, 10)}
+                  <td className="px-4 py-3 text-ink/70">
+                    {score.demandTotalCount + score.supplyCount > 0
+                      ? `${(score.supplyRatio * 100).toFixed(0)}%`
+                      : "—"}
                   </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${trendStyle[score.trendDirection]}`}
+                    >
+                      {trendLabel[score.trendDirection]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-ink/70">{score.demandPeriodCount}</td>
+                  <td className="px-4 py-3 text-ink/70">{score.demandTotalCount}</td>
                   <td className="px-4 py-3 text-ink/50">
                     {theme.lastSeenAt.toISOString().slice(0, 10)}
                   </td>
@@ -175,7 +211,7 @@ export default async function EyeSpyPage({
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-ink/40">
+                <td colSpan={9} className="px-4 py-8 text-center text-ink/40">
                   No themes yet — the cron job seeds sources and pulls signals daily. Check back
                   after the first run, or trigger it manually.
                 </td>
@@ -186,12 +222,13 @@ export default async function EyeSpyPage({
       </div>
 
       <p className="mt-8 max-w-2xl text-xs text-ink/40">
-        Themes accumulate across every source (automated pulls and manual Facebook Group
-        captures alike) — a theme persists across periods rather than resetting each digest, so
-        trend direction is meaningful. Counts here only include "demand" signals (someone
-        asking/struggling) — "supply" signals (businesses/ads, including SEO copy phrased as a
-        question) are classified separately and kept as context on each theme's detail page,
-        not folded into trend numbers. See EYESPY.md for the full spec.
+        Default-sorted by gap score (demand volume × trend × supply ratio), confidence-gated so
+        low-signal themes can't outrank solid ones — same three buckets (Clear gap / Rising,
+        crowded / Watch) as the <Link href="/eyespy/digest" className="text-teal hover:underline">digest</Link>,
+        so the always-live dashboard and the periodic write-up tell the same story. Counts here
+        only include "demand" signals — "supply" signals (businesses/ads, including SEO copy
+        phrased as a question) feed the supply ratio but not the volume/trend numbers. See
+        EYESPY.md for the full spec.
       </p>
     </main>
   );

@@ -120,13 +120,27 @@ model Signal {
   @@index([sourceId])
 }
 
+enum DigestGeneratedBy {
+  scheduled
+  manual
+}
+
+// rankedThemes JSON shape per entry: themeId, label, category, bucket
+// ("clear_gap"/"rising_crowded"/"watch"), gapScore, supplyRatio,
+// trendDirection, demandPeriodCount, demandTotalCount, confidence,
+// exampleSignals (string[]), plus for clear_gap: whyGap/verdict/
+// verdictReason, for rising_crowded: note. See EYESPY.md's Processing
+// steps 5-6 and Output section (both added 2026-08-02) for the full spec.
 model DigestReport {
-  id           String   @id @default(cuid())
-  region       Region   @relation(fields: [regionId], references: [id])
-  regionId     String
-  period       String
-  rankedThemes Json
-  generatedAt  DateTime @default(now())
+  id              String            @id @default(cuid())
+  region          Region            @relation(fields: [regionId], references: [id])
+  regionId        String
+  period          String
+  rankedThemes    Json
+  rollupNote      String?
+  excludedSummary String?
+  generatedBy     DigestGeneratedBy @default(scheduled)
+  generatedAt     DateTime          @default(now())
 
   @@index([regionId, period])
 }
