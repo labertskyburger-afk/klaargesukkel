@@ -96,6 +96,14 @@ enum SignalType {
   demand
   supply
   unclear
+  // Added 2026-08-03: general news/national/international content (mostly
+  // from the broad RSS feeds) getting themed as if it were genuine
+  // Durbanville-area local demand. classifySignal() now gates on this
+  // before theme attach/create — irrelevant signals get signalType
+  // "irrelevant" and themeId stays null, so they never pollute a theme
+  // and (since signalType is set, not null) never get re-classified on
+  // a later run either.
+  irrelevant
 }
 
 model Signal {

@@ -133,12 +133,13 @@ export async function GET(req: NextRequest) {
 
   const results = Object.fromEntries(entries);
 
-  // Phase 2: classify a capped batch of signals missing themeId and/or
-  // signalType (oldest first, across all sources) — see CLASSIFY_CAP_PER_RUN
-  // comment above. This also catches legacy signals classified before
-  // signalType existed (themeId set, signalType null), so old data gets
-  // properly reclassified rather than silently left wrong.
-  const needsClassification = { OR: [{ themeId: null }, { signalType: null }] };
+  // Phase 2: classify a capped batch of signals missing signalType (oldest
+  // first, across all sources) — see CLASSIFY_CAP_PER_RUN comment above.
+  // signalType null is the sole "needs classification" marker — checking
+  // themeId too (as this used to) would make "irrelevant" signals (added
+  // 2026-08-03, themeId permanently null by design) get endlessly
+  // reclassified every run instead of staying marked done.
+  const needsClassification = { signalType: null };
   const unclassified = await prisma.signal.findMany({
     where: { regionId: region.id, ...needsClassification },
     orderBy: { createdAt: "asc" },

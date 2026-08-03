@@ -232,7 +232,11 @@ export default async function EyeSpyPage({
         <Link href="/eyespy/merge-themes" className="text-teal hover:underline">
           Merge duplicate themes
         </Link>{" "}
-        if the list above looks fragmented.
+        if the list above looks fragmented, or{" "}
+        <Link href="/eyespy/purge-themes" className="text-teal hover:underline">
+          purge off-topic themes
+        </Link>{" "}
+        if it's full of general news rather than local demand.
       </p>
     </main>
   );
