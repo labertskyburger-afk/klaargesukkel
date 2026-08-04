@@ -89,79 +89,30 @@
     "type": "Internal tool",
     "status": "Live",
     "priority": "Medium",
-    "description": "Demand-signal research tool — reads compliant sources (Reddit API, search API, Google Places reviews, RSS, open data, podcast) plus weekly manual Facebook Group screenshot capture for a region, computes a gap_score per theme and buckets them into Clear gaps/Rising but crowded/Watch, surfacing a ranked digest to feed product ideation.",
-    "location": "apps/ops (/eyespy, /eyespy/[themeId], /eyespy/capture, /eyespy/sources, /eyespy/digest), this repo — live and pulling real signals from 10 sources: IOL RSS, GroundUp Q&A RSS, GroundUp News RSS, Daily Maverick RSS, CapeTalk consumer podcast, Cape Town Service Requests (ArcGIS), Google Search, Brave Search, Google Places (business reviews), plus manual Facebook Group capture. Every signal is classified demand/supply/unclear, with trend/volume counting demand only. Themes now score gap_score and bucket into Clear gap/Rising/Watch, with a Claude-written digest at /eyespy/digest (on-demand regenerate + weekly Wednesday cron). Reddit built but blocked on an account hold (see next steps). Google Trends alpha still open (low priority).",
+    "description": "Demand-signal research tool — reads compliant sources (Reddit API, search API, Google Places reviews, RSS, open data, podcast) plus weekly manual Facebook Group screenshot capture for a region, classifies each signal demand/supply/irrelevant, computes a gap_score per theme, and buckets them into Clear gaps/Rising but crowded/Watch, surfacing a ranked digest to feed product ideation.",
+    "location": "apps/ops (/eyespy, /eyespy/[themeId], /eyespy/capture, /eyespy/sources, /eyespy/digest, /eyespy/merge-themes, /eyespy/purge-themes), this repo — live and pulling real signals from 10 sources: IOL RSS, GroundUp Q&A RSS, GroundUp News RSS, Daily Maverick RSS, CapeTalk consumer podcast, Cape Town Service Requests (ArcGIS), Google Search, Brave Search, Google Places (business reviews), plus manual Facebook Group capture. Every signal is classified demand/supply/unclear/irrelevant (irrelevant added 2026-08-03 after general national news from the RSS sources was flooding the theme pool), with gap_score/trend/volume counting demand only. Two one-time cleanup tools built 2026-08-03 for backlog fixed by bugs since patched: /eyespy/merge-themes (duplicate themes from an earlier classification-cap bug) and /eyespy/purge-themes (off-topic news themes from the relevance bug) — see next steps for the run order. Reddit built but blocked on an account hold. Google Trends alpha still open (low priority).",
     "docs": "EYESPY.md",
     "nextSteps": [
       {
-        "step": "Blocked 2026-08-02: Anthropic account is out of API credits (\"Your credit balance is too low\") — every classification call is failing, so all new signals (including the fresh Google Places batch) are piling up unclassified. Signals themselves are still being pulled/inserted fine, nothing is lost, they just need reclassifying once credits are back",
+        "step": "Run the two cleanup tools in order, then generate the first real digest: /eyespy/merge-themes first (merges duplicate themes), then /eyespy/purge-themes (deletes off-topic news themes), then click 'Regenerate digest now' on /eyespy/digest. Order matters — a digest scored against fragmented or off-topic themes would misrepresent what's actually a gap",
         "owner": "Albert",
         "waitingOn": "",
         "priority": "High",
         "detail": [
-          "Go to console.anthropic.com, click Plans & Billing, and add credits (or set up auto-reload).",
-          "Once topped up, trigger the cron a handful of times (Vercel → Cron Jobs → Run) to catch up on both the signal_type backfill and the new Places reviews — capped at 40 classifications per run, so it'll take several triggers."
+          "Migration apps/ops/prisma/migrations/20260803120000_add_digest_gap_score/migration.sql and apps/ops/prisma/migrations/20260803140000_add_irrelevant_signal_type/migration.sql need hand-applying via the Query tool first if not already done."
         ]
       },
       {
-        "step": "Blocked 2026-08-02: Reddit is showing Albert's account \"blocked by network security\" on reddit.com/prefs/apps — reproduced across a different browser (Edge) and a different network (phone on mobile data), so it looks like an account-level hold rather than anything fixable on our end. Ticket filed with Reddit. Parked, not urgent — everything else (RSS, ArcGIS, Google, Brave, manual capture) is live without it. lib/ingest/reddit.ts is already built and wired in (client_credentials OAuth, r/CapeTown + r/southafrica search for \"Durbanville\"), just needs REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET once the account is unblocked",
+        "step": "Blocked 2026-08-02: Reddit is showing Albert's account \"blocked by network security\" on reddit.com/prefs/apps — reproduced across a different browser (Edge) and a different network (phone on mobile data), so it looks like an account-level hold rather than anything fixable on our end. Ticket filed with Reddit. Parked, not urgent — everything else is live without it. lib/ingest/reddit.ts is already built and wired in (client_credentials OAuth, r/CapeTown + r/southafrica search for \"Durbanville\"), just needs REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET once the account is unblocked",
         "owner": "Albert",
         "waitingOn": "Reddit's account hold clearing (could be hours to a couple days) — no need to keep retrying, it won't speed it up",
         "priority": "Low"
-      },
-      {
-        "step": "Parked 2026-08-02: Google Search (geo+intent) is active but returning zero signals — its Programmable Search Engine is still restricted to 4 specific sites (facebook.com, gumtree.co.za, hellopeter.com, reddit.com) since the \"search the entire web\" toggle never worked in Google's UI (see earlier troubleshooting). Brave Search is doing the equivalent job without that restriction (99 signals, working fine), so Albert decided not to keep chasing Google's config — left active as-is, not a bug to fix, just redundant. Revisit only if Brave ever gets throttled/removed",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "Low"
-      },
-      {
-        "step": "Provide Google Places API key",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "Medium",
-        "detail": [
-          "Go to console.cloud.google.com, select the same project used for Search (or create one).",
-          "Go to APIs & Services > Library, search for 'Places API', click Enable.",
-          "Go to APIs & Services > Credentials, click Create Credentials > API Key, copy it.",
-          "Consider restricting the key to the Places API only under the key's settings, for safety."
-        ]
       },
       {
         "step": "Apply for Google Trends API (alpha) access — new official API (launched July 2025), free for approved testers, gives quantified search-intent data to cross-check qualitative sources. Not urgent, approval timeline unknown",
         "owner": "Albert",
         "waitingOn": "",
         "priority": "Low"
-      },
-      {
-        "step": "Decided 2026-08-02: starting with just 2 tracked groups (Durbanville Mammas, Durbanville) rather than the original 5-10 — Albert wants to see if the weekly manual-capture workflow is actually worth doing regularly before expanding the list or committing to who runs the Wednesday session",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "Low"
-      },
-      {
-        "step": "Built 2026-08-03: the gap_score/digest layer from EYESPY.md's Processing steps 5-7. New lib/ingest/gapScore.ts computes gap_score = recency-weighted demand volume × trend multiplier × supply_ratio per theme, confidence-gated (themes under 5 demand signals can't outrank solid ones) into three buckets (Clear gap / Rising, crowded / Watch — dormant themes excluded from scoring entirely). New lib/ingest/digest.ts calls Claude (Opus) to write why_gap + a practical-fit verdict for each Clear gap theme, a differentiation note for each Rising theme, and a cross-theme rollup note when themes overlap. New /eyespy/digest page (+ 'Regenerate digest now' button, POST /api/eyespy/digest) and a Wednesday 16:00 UTC cron (GET /api/cron/digest) for the baseline weekly cadence. The live /eyespy themes table now default-sorts by bucket-then-gap_score and shows a bucket badge + supply ratio column, same buckets as the digest so both tell the same story. Migration apps/ops/prisma/migrations/20260803120000_add_digest_gap_score/migration.sql needs hand-applying via the Query tool",
-        "owner": "Claude Code",
-        "waitingOn": "",
-        "priority": "High"
-      },
-      {
-        "step": "Found + fixed 2026-08-03: classifySignal() only showed Claude the 100 most-recently-seen themes as attach candidates, so with hundreds of themes now existing, older ones became invisible and kept getting duplicated instead of matched. Fixed (cap raised to 2000) — stops new duplicates, but the existing fragmentation needs a one-time cleanup. Built /eyespy/merge-themes: Claude proposes duplicate groups, Albert reviews/unchecks, then applying reassigns signals to a survivor theme and deletes the rest. Do this before generating the first digest — a digest scored against fragmented themes would split real demand across many under-confidence Watch entries instead of one solid Clear gap",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "High"
-      },
-      {
-        "step": "Found + fixed 2026-08-03: hundreds of themes turned out to be general South African news (\"geopolitics and international conflict\", \"judicial accountability and government ethics\") from the broad RSS sources (IOL, Daily Maverick, GroundUp News), classified as if it were local Durbanville demand — spotted via the category filter list on /eyespy ballooning to hundreds of near-random categories. classifySignal() now judges relevance first (new signalType value \"irrelevant\") before theme attach/create, so this stops going forward. Built /eyespy/purge-themes for the existing backlog: Claude flags off-topic themes in reviewable batches, confirming deletes the theme and its signals. Migration apps/ops/prisma/migrations/20260803140000_add_irrelevant_signal_type/migration.sql needs hand-applying via the Query tool first (single statement: ALTER TYPE \"SignalType\" ADD VALUE 'irrelevant')",
-        "owner": "Claude Code",
-        "waitingOn": "",
-        "priority": "High"
-      },
-      {
-        "step": "Run both cleanup tools, then generate the first real digest: /eyespy/merge-themes (duplicate themes from the earlier classification-cap bug), then /eyespy/purge-themes (off-topic news themes from the RSS relevance bug), then 'Regenerate digest now' on /eyespy/digest. Doing this in order matters — a digest scored against fragmented or off-topic themes would misrepresent what's actually a gap",
-        "owner": "Albert",
-        "waitingOn": "",
-        "priority": "High"
       }
     ],
     "added": "2026-07-29"
