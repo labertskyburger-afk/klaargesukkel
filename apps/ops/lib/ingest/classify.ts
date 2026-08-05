@@ -13,14 +13,14 @@ const client = new Anthropic();
 function buildClassifyTool(areaPhrase: string): Anthropic.Tool {
   return {
     name: "classify_signal",
-    description: `First judge whether a signal is actually about a local need in ${areaPhrase} — if not, mark it irrelevant and stop there. Otherwise classify it against the region's existing themes (attach or propose new) and judge whether it's demand or supply.`,
+    description: `First judge whether a signal is actually about a local need specifically in ${areaPhrase} — if not, mark it irrelevant and stop there. Otherwise classify it against the region's existing themes (attach or propose new) and judge whether it's demand or supply.`,
     input_schema: {
       type: "object",
       properties: {
         action: {
           type: "string",
           enum: ["attach", "new", "irrelevant"],
-          description: `'irrelevant' = general news, national/international politics, or any topic not tied to a specific local need in ${areaPhrase} — e.g. an article about immigration law, climate policy, or national crime statistics with no local-demand angle. This is common from the broad RSS news sources; use it whenever a signal doesn't represent someone in that area needing, wanting, or struggling to find something. Otherwise 'attach' to a matching existing theme or propose a 'new' one.`,
+          description: `'irrelevant' = general news, national/international politics, or anything not specifically about ${areaPhrase} — e.g. an article about immigration law, climate policy, or a crime/news story set in some other Cape Town suburb not listed above. Sharing a broad topic that residents of ${areaPhrase} might also happen to care about (crime, cost of living, load-shedding, etc.) is NOT enough on its own — the signal must actually be about this specific local market: it names one of the suburbs listed above, or is otherwise unambiguously specific to this area, not just Cape Town or South Africa in general. This distinction matters most for the broad RSS news sources, which pull an entire regional feed with no geographic filtering upstream — don't let topical relevance substitute for geographic relevance. Use 'irrelevant' whenever a signal doesn't represent someone specifically in ${areaPhrase} needing, wanting, or struggling to find something. Otherwise 'attach' to a matching existing theme or propose a 'new' one.`,
         },
         theme_id: {
           type: "string",
