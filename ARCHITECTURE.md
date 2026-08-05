@@ -82,6 +82,58 @@ no single provider confirmed yet, ships with a manual waiver/document-upload fal
 repo, own Claude Code session, same as Cockpit/Sukkel Bot. Full spec in that repo's own
 CLAUDE.md — ask Albert for the path/repo location if it's not open in this session.
 
+**Get it Sorted (added 2026-08-04):** a local services marketplace — "Uber or
+Airbnb for services, not products." A customer describes a need in plain language, it routes
+automatically to relevant nearby verified suppliers, they quote or ask clarifying questions,
+the customer books, pays through the platform, and both sides rate each other. Name settled
+2026-08-04: **"Get it Sorted"**, shortening to **"Sorted"** as it earns recognition, with
+**"Klaargesukkel"** as the Afrikaans-facing equivalent — same meaning rather than a literal
+translation, so the product is bilingual `en-ZA`/`af-ZA` from the first screen (two locale
+variants of one product, one database, not two brands). *Open brand question for Albert:
+Klaargesukkel is also the parent business name, so those two roles blur — decide deliberately
+rather than by accident.* **This one is
+structurally different from the other Layer 3 entries: it's not delivered to a client, it's a
+Klaargesukkel-owned platform with two-sided public users** — but it lives here rather than in
+Layer 2 because it's far too large to sit as an `apps/<name>` folder, needs its own repo, own
+deploy, and eventually its own region/tenancy model. Treat "Layer 3" here as "separate repo,
+independently deployed," not "client-delivered."
+
+Originated from EyeSpy (Layer 4), which found large volumes of both demand and supply in
+Durbanville failing to connect — the first case of the internal ideation tool actually
+generating a product direction, which is what it was built for.
+
+**North-star metric: time from "I have a problem" to "my problem is actually solved."** Not
+signups, listings, quotes issued, or engagement. Every design decision is judged against
+whether it shortens that clock — it's instrumented in the schema from day one, surfaced in
+the ops view, and doubles as the enshittification tripwire (friction added to extract value
+shows up here first, as a rising number).
+
+**The defining constraint is the business model, not the technology — and as of 2026-08-04 the
+model is: free, on both sides.** No commission, no per-lead charges, no paid placement, no
+subscription that buys visibility. Purpose-first, on the thesis that if it genuinely helps
+people, value flows back through other routes.
+
+That decision is load-bearing rather than sentimental. The documented failure mode in this
+exact category (Bark, Thumbtack) is pay-per-lead — charging suppliers for the *chance* to
+quote makes lead volume the revenue driver, directly opposed to suppliers winning real work.
+An earlier draft of this spec proposed commission-on-completion as the compromise, but
+identified payment leakage (jobs matched here, paid in cash off-platform) as the single
+biggest threat to the business. **Going free doesn't mitigate that risk, it deletes it** —
+there's no toll to route around. It also inverts the incentive on the data the matching engine
+depends on: under commission a supplier's rational move is to *hide* a completed job, whereas
+free makes logging it costless and reputation-building, so the reputation system finally has
+clean inputs. Secondary wins: no FIC Act fund-holding exposure, no escrow legal opinion, no
+per-supplier merchant-account onboarding wall, and weeks of payment integration off the v1
+critical path.
+
+Since money no longer proves a job happened, **two-sided confirmation replaces payment as
+proof** — supplier marks complete, customer confirms in one tap, and only confirmed jobs count
+toward reputation, ranking, and the north-star metric. Sustainability comes later from
+optional supplier admin tools (paid for saving them work, never for visibility) and from
+licensing the engine — governed by one rule: *does this change who gets matched, or how fast a
+problem gets solved? If yes, don't.* Everything is region-scoped from the first migration so
+worldwide expansion isn't a rewrite. Full spec in that repo's own CLAUDE.md and BUSINESS.md.
+
 ## Layer 4 — Operations & Intelligence (`apps/ops`, this repo)
 
 `ops.klaargesukkel.com`, private, not linked from the public hub. **Merged into one app

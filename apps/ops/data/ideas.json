@@ -172,6 +172,78 @@
     "added": "2026-07-29"
   },
   {
+    "name": "Get it Sorted",
+    "type": "Owned platform",
+    "status": "Spec written",
+    "priority": "High",
+    "description": "Local services marketplace — 'Uber/Airbnb for services, not products'. Customer describes a need in plain language, it routes to relevant nearby verified suppliers, they quote/ask questions, customer books, job gets done, both sides confirm and rate. Name decided 2026-08-04: 'Get it Sorted', shortening to 'Sorted', with 'Klaargesukkel' as the Afrikaans-facing equivalent (same meaning, not a literal translation) — bilingual en-ZA/af-ZA from the first screen. Came directly out of EyeSpy finding large unconnected supply and demand in Durbanville. North-star metric: time from 'I have a problem' to 'my problem is solved'. FREE ON BOTH SIDES (decided 2026-08-04) — no commission, no per-lead charges, no paid placement, purpose-first. This deletes the payment-leakage risk entirely (no toll to route around) and inverts the data incentive: under commission a supplier hides completed jobs to avoid the fee, under free they log them because it builds the reputation that wins future work. Job completion is proven by two-sided confirmation instead of by payment.",
+    "location": "separate repo (not yet created), repo name 'getitsorted'",
+    "docs": "getitsorted-CLAUDE.md (what to build) + getitsorted-BUSINESS.md (operating model, unit economics, staged plan) — both written in Cowork 2026-08-04",
+    "nextSteps": [
+      {
+        "step": "STAGE 0 VALIDATION — talk to 5-10 real Durbanville tradesmen before significant build. No code required. Much easier conversation now that it's free: 'you never pay us, you just get matched to people nearby who need what you do — would you use it, and would you mark jobs done to build your rating?' Remaining open questions are smaller than they were: will suppliers actually mark jobs complete, will customers actually confirm (one tap, but their problem is already solved and attention has moved on), and is the matching genuinely better than asking in a Facebook group? Still the highest-value action available",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "RESOLVED 2026-08-04 — the product is FREE on both sides, no commission, purpose-first ('if there is value in the solution, money will flow'). This removed four previously-blocking prerequisites at once: commission rate, gateway-fee treatment, Payfast merchant account, and the per-supplier merchant-account onboarding hurdle (which was flagged as possibly the worst friction in the whole model). Also removes FIC Act fund-holding exposure and the escrow legal opinion, and takes weeks of payment integration off the Stage 1 critical path. Sustainability path (BUSINESS.md section 5): Albert funds ~R1,000-1,500/mo during proving; later, optional supplier admin tools (invoicing, quoting, job history, SARS-friendly records) at R99-249/mo — only ~28-70 paying suppliers covers the platform's entire running cost at 1,000 jobs/mo. The rule protecting this: any future revenue idea must pass 'does this change who gets matched, or how fast a problem gets solved?' — if yes, don't",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Low"
+      },
+      {
+        "step": "Cost model corrected 2026-08-04 against verified pricing — earlier estimate (R840/mo fixed + R2-6/job) was wrong in both directions. Fixed is LOWER: ~R350/mo (Vercel Pro R331, Neon free tier early, domain). Variable is HIGHER and differently driven: WhatsApp is ~100% of it, and it scales with needs posted x suppliers notified, NOT completed jobs (unconverted needs still cost full price). Messages inside a 24h customer-initiated window are free; anything the platform initiates outside one needs a paid template (~R1.42/msg verified SA marketing rate). Notifying 5 suppliers per need = R1.50-R7 per need; at 1,000 jobs/mo with poor conversion that reaches ~R36,000/mo. THE FIX (now specced): split channels by side — customers on WhatsApp (they initiate, opening a free window, and will never install an app for something they need twice a year), suppliers on a lightweight PWA with free web push (they're daily repeat users with a commercial reason to install). That one architectural choice is worth ~R35,000/mo at scale and keeps running cost near the R350 fixed floor",
+        "owner": "Claude Code to report cost-per-job weekly, Albert to watch",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Confirm the actual South African WhatsApp UTILITY template rate before building any supplier-facing notification that uses one. The marketing rate (~$0.086 / R1.42 per message) is verified; the utility rate used in the cost model (R0.30-R0.80) is an estimate and the model is sensitive to it",
+        "owner": "Albert or Claude Code",
+        "waitingOn": "",
+        "priority": "Medium"
+      },
+      {
+        "step": "Decide sequencing against the other projects — Get it Sorted is the most ambitious thing in the portfolio, and deciding it comes first means Cockpit / Sukkel Bot / Klaarkantoor / EyeSpy wait. Make that explicit rather than running six projects at 15% each (flagged as a real risk in BUSINESS.md section 8)",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Resolve the brand question: Klaargesukkel is currently the parent business name, and is now also the Afrikaans product name for this — those two roles blur, and an Afrikaans speaker seeing 'Klaargesukkel' won't know if it's the company or the product. Options: keep the parent brand distinct in Afrikaans copy, or lean in and treat Klaargesukkel as the consumer-facing Afrikaans brand with the company behind it. Cowork-side brand decision, not Claude Code's",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Medium"
+      },
+      {
+        "step": "Google Maps Platform API key (Maps, Places, Geocoding, Distance Matrix) — also used to seed the initial Durbanville supplier directory from Google Places, which is the cold-start strategy",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Medium"
+      },
+      {
+        "step": "WhatsApp Business Cloud API access via Meta Business verification — same prerequisite as Sukkel Bot, reuse if already in progress. WhatsApp is the primary notification channel (nobody installs an app for something they need twice a year)",
+        "owner": "Albert",
+        "waitingOn": "Meta business verification (shared with Sukkel Bot)",
+        "priority": "Medium"
+      },
+      {
+        "step": "DEFERRED — no longer relevant to v1 after the free decision, since no money flows through the platform at all. Only revisit if optional at-cost payments are ever added (BUSINESS.md section 5): a legal opinion would be needed before any escrow/hold-until-job-done feature, since holding customer funds risks FIC Act accountable-institution obligations (Directive 11 of 2026, effective 1 April 2026)",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "Low"
+      },
+      {
+        "step": "Start new Claude Code session with getitsorted-CLAUDE.md as the new repo's CLAUDE.md, and build Stage 1: the need → route → quote → book → pay → rate loop for one category in one suburb, even if matching is crude and half of it is manual. Stage 1 is successful when a real Durbanville customer's real problem got solved end-to-end and the time-to-resolution number is visible in the ops view — not when the feature list is complete",
+        "owner": "Albert to kick off, then Claude Code",
+        "waitingOn": "Stage 0 validation + the commission and sequencing decisions above",
+        "priority": "High"
+      }
+    ],
+    "added": "2026-08-04"
+  },
+  {
     "name": "Order Desk",
     "type": "Owned product",
     "status": "Idea",
