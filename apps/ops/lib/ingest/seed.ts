@@ -2,6 +2,18 @@ import { prisma } from "@/lib/prisma";
 
 const REGION_NAME = "Durbanville, Cape Town";
 
+// A region isn't just its umbrella name — real data (service requests,
+// forum posts) usually names the specific sub-suburb, not "Durbanville"
+// itself. Found 2026-08-03: the ArcGIS source's whereClause only matched
+// "%DURBANVILLE%", silently missing real records like "EVERSDAL",
+// "Stellenryk.", "Stellenberg Village" that never mention Durbanville by
+// name at all. Whenever a new region gets built for EyeSpy, do this
+// research up front — confirm the umbrella area's actual sub-suburbs/
+// postal codes and wire them into every source's geo-scoping (ArcGIS
+// whereClause, search query alternation, Reddit query), not just the one
+// headline place name. See EYESPY.md's "Starting region" section.
+const DURBANVILLE_AREAS = ["Durbanville", "Stellenryk", "Stellenberg", "Eversdal"];
+
 // Restricted to community/forum sites, not the open web — general geo+intent
 // queries against the whole web mostly surface local businesses' own SEO
 // landing pages (their ad copy literally echoes "are you looking for a
@@ -19,18 +31,20 @@ const SITE_RESTRICTION = "(site:reddit.com OR site:facebook.com OR site:hellopet
 // of the SEO-ad noise even before the site restriction does its part.
 // Tune/expand this list later via a direct SQL update to the Source row,
 // same pattern as the ArcGIS source's config.
-// "Durbanville" is quoted deliberately — found 2026-08-03 that an
-// unquoted geo term is treated as a relevance nice-to-have, not a
-// requirement, so a well-matching Reddit post from Durham, NC ("r/bullcity
-// ... north durham") or Johannesburg was outranking on phrase-similarity
-// alone despite never mentioning Durbanville at all. Quoting forces an
-// exact-match requirement.
+// Each geo term is quoted and OR'd across every Durbanville-area sub-suburb
+// — found 2026-08-03 that (a) an unquoted geo term is treated as a
+// relevance nice-to-have, not a requirement, so a well-matching Reddit
+// post from Durham, NC ("r/bullcity ... north durham") or Johannesburg was
+// outranking on phrase-similarity alone despite never mentioning
+// Durbanville at all, and (b) "Durbanville" alone misses real local
+// content that only names a sub-suburb (e.g. "Eversdal", "Stellenryk").
+const GEO_ALTERNATION = `(${DURBANVILLE_AREAS.map((a) => `"${a}"`).join(" OR ")})`;
 const SEARCH_QUERIES = [
-  `${SITE_RESTRICTION} "can anyone recommend" plumber "Durbanville"`,
-  `${SITE_RESTRICTION} "does anyone know a good" electrician "Durbanville"`,
-  `${SITE_RESTRICTION} "can anyone recommend" handyman "Durbanville"`,
-  `${SITE_RESTRICTION} "does anyone know" childcare "Durbanville"`,
-  `${SITE_RESTRICTION} "does anyone offer" dog walking "Durbanville"`,
+  `${SITE_RESTRICTION} "can anyone recommend" plumber ${GEO_ALTERNATION}`,
+  `${SITE_RESTRICTION} "does anyone know a good" electrician ${GEO_ALTERNATION}`,
+  `${SITE_RESTRICTION} "can anyone recommend" handyman ${GEO_ALTERNATION}`,
+  `${SITE_RESTRICTION} "does anyone know" childcare ${GEO_ALTERNATION}`,
+  `${SITE_RESTRICTION} "does anyone offer" dog walking ${GEO_ALTERNATION}`,
 ];
 
 // Idempotent: safe to call on every cron run. Creates the starting region and
@@ -43,7 +57,7 @@ export async function ensureSeed() {
     region = await prisma.region.create({
       data: {
         name: REGION_NAME,
-        keywords: ["Durbanville", "Cape Town", "Western Cape"],
+        keywords: [...DURBANVILLE_AREAS, "Cape Town", "Western Cape"],
       },
     });
   }
@@ -86,12 +100,15 @@ export async function ensureSeed() {
         active: true,
         // "Service Requests 2023 until 30 July 2026" — City of Cape Town's
         // public SAP C3 Notifications feed, confirmed live 2026-08-02.
-        // Scoped to Durbanville via whereClause since the feed covers all
-        // of Cape Town otherwise.
+        // Scoped to the Durbanville area via whereClause since the feed
+        // covers all of Cape Town otherwise — OR'd across every sub-suburb
+        // (not just "Durbanville" itself, see DURBANVILLE_AREAS comment).
         config: {
           queryUrl:
             "https://services6.arcgis.com/nyYfO9SxHU2ChQd9/arcgis/rest/services/Service_Requests_2023_until_20_May_2026/FeatureServer/0",
-          whereClause: "UPPER(Suburb) LIKE '%DURBANVILLE%'",
+          whereClause: DURBANVILLE_AREAS.map(
+            (a) => `UPPER(Suburb) LIKE '%${a.toUpperCase()}%'`
+          ).join(" OR "),
           textFields: ["C3_Complaint_Type", "Notification_type", "Suburb", "Ward"],
           dateField: "Created_On_Date",
         },
@@ -149,11 +166,14 @@ export async function ensureSeed() {
         // Inactive until REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET are set on
         // the apps/ops Vercel project. Per EYESPY.md, highest-priority
         // source — least filtered, people describing their own problem in
-        // their own words. Kept to a broad "Durbanville" query rather than
-        // pulling entire subreddit feeds, so classification isn't drowned
-        // in general Cape Town chatter.
+        // their own words. Kept to an OR'd Durbanville-area query rather
+        // than pulling entire subreddit feeds, so classification isn't
+        // drowned in general Cape Town chatter.
         active: false,
-        config: { subreddits: ["CapeTown", "southafrica"], query: "Durbanville" },
+        config: {
+          subreddits: ["CapeTown", "southafrica"],
+          query: DURBANVILLE_AREAS.map((a) => `"${a}"`).join(" OR "),
+        },
       },
     });
   }
