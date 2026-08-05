@@ -1,7 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 
-const client = new Anthropic();
+// Slightly higher maxRetries than the SDK default (2) — found 2026-08-05:
+// this one-time cleanup tool keeps hitting Anthropic 529 overloaded_error on
+// a chunk of its per-category calls. Kept modest rather than pushed high:
+// every category's call is awaited together via Promise.all in
+// proposeThemeMerges, so the route only returns once the SLOWEST one
+// settles — a long retry/backoff chain on one category risks dragging the
+// entire 60s route timeout down with it, breaking every category's result,
+// not just the slow one. A small bump absorbs typical transient overload
+// without that risk; anything left over is still meant to be re-run later,
+// per the existing partial-results UI.
+const client = new Anthropic({ maxRetries: 3 });
 
 const MERGE_TOOL: Anthropic.Tool = {
   name: "propose_theme_merges",
