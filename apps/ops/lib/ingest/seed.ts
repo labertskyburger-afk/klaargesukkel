@@ -19,12 +19,18 @@ const SITE_RESTRICTION = "(site:reddit.com OR site:facebook.com OR site:hellopet
 // of the SEO-ad noise even before the site restriction does its part.
 // Tune/expand this list later via a direct SQL update to the Source row,
 // same pattern as the ArcGIS source's config.
+// "Durbanville" is quoted deliberately — found 2026-08-03 that an
+// unquoted geo term is treated as a relevance nice-to-have, not a
+// requirement, so a well-matching Reddit post from Durham, NC ("r/bullcity
+// ... north durham") or Johannesburg was outranking on phrase-similarity
+// alone despite never mentioning Durbanville at all. Quoting forces an
+// exact-match requirement.
 const SEARCH_QUERIES = [
-  `${SITE_RESTRICTION} "can anyone recommend" plumber Durbanville`,
-  `${SITE_RESTRICTION} "does anyone know a good" electrician Durbanville`,
-  `${SITE_RESTRICTION} "can anyone recommend" handyman Durbanville`,
-  `${SITE_RESTRICTION} "does anyone know" childcare Durbanville`,
-  `${SITE_RESTRICTION} "does anyone offer" dog walking Durbanville`,
+  `${SITE_RESTRICTION} "can anyone recommend" plumber "Durbanville"`,
+  `${SITE_RESTRICTION} "does anyone know a good" electrician "Durbanville"`,
+  `${SITE_RESTRICTION} "can anyone recommend" handyman "Durbanville"`,
+  `${SITE_RESTRICTION} "does anyone know" childcare "Durbanville"`,
+  `${SITE_RESTRICTION} "does anyone offer" dog walking "Durbanville"`,
 ];
 
 // Idempotent: safe to call on every cron run. Creates the starting region and
