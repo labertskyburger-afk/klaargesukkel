@@ -82,12 +82,20 @@ const NORMALIZE_TOOL: Anthropic.Tool = {
 // a few hundred themes rarely produce more than ~100 distinct category
 // strings. Falls back to an identity mapping (no normalization) on failure
 // rather than aborting the whole scan.
+//
+// Haiku, not Opus — found 2026-08-05: this call runs sequentially before
+// the parallel per-category merge calls, so it sits on the request's
+// critical path. With Opus it pushed the whole /propose route past its
+// 60s maxDuration, and Vercel's own timeout error page (plain text, not
+// JSON) broke the client's res.json() parse. Clustering ~80 short labels
+// doesn't need Opus-level judgment anyway, and the actual merge decisions
+// downstream stay conservative regardless of how good this pass is.
 async function normalizeCategories(categories: string[]): Promise<Map<string, string>> {
   if (categories.length < 2) return new Map(categories.map((c) => [c, c]));
 
   try {
     const response = await client.messages.create({
-      model: "claude-opus-5",
+      model: "claude-haiku-4-5",
       max_tokens: 4096,
       tools: [NORMALIZE_TOOL],
       tool_choice: { type: "tool", name: "normalize_categories" },

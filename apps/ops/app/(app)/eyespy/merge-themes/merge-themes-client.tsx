@@ -33,6 +33,14 @@ export default function MergeThemesClient() {
     setScanErrors([]);
     try {
       const res = await fetch("/api/eyespy/merge-themes/propose", { method: "POST" });
+      // A killed serverless function (e.g. past Vercel's maxDuration) returns
+      // a plain-text/HTML error page, not JSON — surface that plainly rather
+      // than letting res.json() throw a cryptic "Unexpected token" message.
+      if (!res.ok && !res.headers.get("content-type")?.includes("application/json")) {
+        throw new Error(
+          `Request failed (${res.status}) — likely a server timeout. Try again, or narrow the scan.`
+        );
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to find duplicates");
       const groups: MergeGroupProposal[] = data.groups;
