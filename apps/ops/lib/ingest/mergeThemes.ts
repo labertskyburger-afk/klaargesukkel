@@ -46,6 +46,84 @@ const MERGE_TOOL: Anthropic.Tool = {
   },
 };
 
+const NORMALIZE_TOOL: Anthropic.Tool = {
+  name: "normalize_categories",
+  description:
+    "Cluster a list of theme category labels into canonical categories — group labels that describe the same real-world category despite different wording (e.g. 'consumer protection' and 'consumer protection and electronics services' belong together). Every input label must appear exactly once, mapped to a canonical category string — reuse the identical canonical string for every label in the same group.",
+  input_schema: {
+    type: "object",
+    properties: {
+      mappings: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            original: { type: "string", description: "One of the exact input category labels, verbatim." },
+            canonical: { type: "string", description: "The canonical category label this belongs to." },
+          },
+          required: ["original", "canonical"],
+        },
+      },
+    },
+    required: ["mappings"],
+  },
+};
+
+// Category is free text the classifier invents per new theme, not a fixed
+// taxonomy — it drifts ("consumer protection" / "consumer protection and
+// electronics services" / "consumer protection and home services" are
+// almost certainly one real category worded three ways). proposeThemeMerges
+// only compares themes within the same category bucket, so uncorrected
+// drift silently hides real duplicates from ever being compared to each
+// other — found 2026-08-05 when three near-identical "social clubs for
+// newcomers" themes each landed in a different category and a merge scan
+// came back clean. This clusters the distinct category strings down to
+// canonical ones before bucketing — one cheap call, not chunked, since even
+// a few hundred themes rarely produce more than ~100 distinct category
+// strings. Falls back to an identity mapping (no normalization) on failure
+// rather than aborting the whole scan.
+async function normalizeCategories(categories: string[]): Promise<Map<string, string>> {
+  if (categories.length < 2) return new Map(categories.map((c) => [c, c]));
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-5",
+      max_tokens: 4096,
+      tools: [NORMALIZE_TOOL],
+      tool_choice: { type: "tool", name: "normalize_categories" },
+      messages: [
+        {
+          role: "user",
+          content: `Here are ${categories.length} distinct category labels currently in use:\n\n${categories
+            .map((c) => `- ${c}`)
+            .join("\n")}\n\nCluster them into canonical categories per the tool's instructions. Every label above must appear exactly once in your output.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    );
+    if (!toolUse) throw new Error("model did not return a tool call");
+
+    const input = toolUse.input as { mappings: { original: string; canonical: string }[] };
+    const map = new Map<string, string>();
+    for (const { original, canonical } of input.mappings ?? []) {
+      if (categories.includes(original)) map.set(original, canonical);
+    }
+    // Any label the model dropped from its output falls back to itself, so
+    // it still gets scanned — just not merged with a differently-worded
+    // sibling this run.
+    for (const c of categories) {
+      if (!map.has(c)) map.set(c, c);
+    }
+    return map;
+  } catch (err) {
+    console.error("normalizeCategories failed, falling back to raw categories:", err);
+    return new Map(categories.map((c) => [c, c]));
+  }
+}
+
 export type MergeGroupProposal = {
   themeIds: string[];
   themeLabels: string[];
@@ -144,9 +222,14 @@ export async function proposeThemeMerges(
   });
   const countByThemeId = new Map(signalCounts.map((s) => [s.themeId as string, s._count]));
 
+  const distinctCategories = Array.from(
+    new Set(themes.map((t) => t.category).filter((c): c is string => !!c))
+  );
+  const categoryMap = await normalizeCategories(distinctCategories);
+
   const byCategory = new Map<string, ThemeRow[]>();
   for (const t of themes) {
-    const key = t.category ?? "(uncategorized)";
+    const key = t.category ? categoryMap.get(t.category) ?? t.category : "(uncategorized)";
     const bucket = byCategory.get(key) ?? [];
     bucket.push(t);
     byCategory.set(key, bucket);
