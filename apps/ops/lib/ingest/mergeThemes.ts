@@ -59,7 +59,7 @@ const MERGE_TOOL: Anthropic.Tool = {
 const NORMALIZE_TOOL: Anthropic.Tool = {
   name: "normalize_categories",
   description:
-    "Cluster a list of theme category labels into canonical categories — group labels that describe the same real-world category despite different wording (e.g. 'consumer protection' and 'consumer protection and electronics services' belong together). Every input label must appear exactly once, mapped to a canonical category string — reuse the identical canonical string for every label in the same group.",
+    "Cluster a list of theme category labels into a SMALL number of broad canonical categories — group labels that describe the same or an overlapping real-world topic despite different wording (e.g. 'consumer protection', 'consumer protection and electronics services', and 'consumer protection and home services' all belong together; 'community engagement and social wellbeing' and 'recreation and social engagement' belong together too, since both are about community/social-life needs). Err on the side of broader, fewer clusters rather than narrow, precise ones — this is only a pre-filter for which themes get compared to each other for possible merging, not the merge decision itself, so a wrongly-broad cluster costs nothing (the later step is conservative and will correctly decline to merge themes that turn out to be genuinely different), while a wrongly-narrow cluster silently hides real duplicates from ever being compared. Every input label must appear exactly once, mapped to a canonical category string — reuse the identical canonical string for every label in the same group.",
   input_schema: {
     type: "object",
     properties: {
