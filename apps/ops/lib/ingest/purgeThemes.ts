@@ -1,38 +1,45 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { buildAreaPhrase } from "@/lib/ingest/seed";
 
 const client = new Anthropic();
 
-const RELEVANCE_TOOL: Anthropic.Tool = {
-  name: "judge_theme_relevance",
-  description:
-    "For each theme, judge whether it represents a genuine Durbanville-area (Cape Town, South Africa) local business/service need or gap — versus general news, national/international politics, or any topic not tied to a specific local demand someone in Durbanville actually has. Flag themes that are clearly off-topic general news content, not real local demand signal.",
-  input_schema: {
-    type: "object",
-    properties: {
-      judgments: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            theme_id: { type: "string" },
-            irrelevant: {
-              type: "boolean",
-              description:
-                "True if this is general news/politics/national content, not a genuine Durbanville-area local need.",
+// Built per-call from the region's actual Area rows (see seed.ts's
+// buildAreaPhrase) rather than a hardcoded "Durbanville-area" string — found
+// 2026-08-05 hardcoded here even after classify.ts's relevance gate became
+// area-driven, then again after Bellville/Brackenfell local markets were
+// added: this tool would have kept flagging genuine Bellville/Brackenfell
+// demand as "off-topic" purely because it doesn't mention "Durbanville".
+function buildRelevanceTool(areaPhrase: string): Anthropic.Tool {
+  return {
+    name: "judge_theme_relevance",
+    description: `For each theme, judge whether it represents a genuine local business/service need or gap specifically in ${areaPhrase} — versus general news, national/international politics, or any topic not tied to a specific local demand someone in that area actually has. Flag themes that are clearly off-topic general news content, not real local demand signal.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        judgments: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              theme_id: { type: "string" },
+              irrelevant: {
+                type: "boolean",
+                description: `True if this is general news/politics/national content, not a genuine local need specifically in ${areaPhrase}.`,
+              },
+              reasoning: {
+                type: "string",
+                description: "Required when irrelevant is true — one sentence why.",
+              },
             },
-            reasoning: {
-              type: "string",
-              description: "Required when irrelevant is true — one sentence why.",
-            },
+            required: ["theme_id", "irrelevant"],
           },
-          required: ["theme_id", "irrelevant"],
         },
       },
+      required: ["judgments"],
     },
-    required: ["judgments"],
-  },
-};
+  };
+}
 
 export type IrrelevantThemeProposal = {
   themeId: string;
@@ -51,7 +58,8 @@ const BATCH_SIZE = 50;
 
 async function judgeBatch(
   themes: ThemeRow[],
-  countByThemeId: Map<string, number>
+  countByThemeId: Map<string, number>,
+  areaPhrase: string
 ): Promise<IrrelevantThemeProposal[]> {
   const themeList = themes
     .map(
@@ -63,12 +71,12 @@ async function judgeBatch(
   const response = await client.messages.create({
     model: "claude-opus-5",
     max_tokens: 4096,
-    tools: [RELEVANCE_TOOL],
+    tools: [buildRelevanceTool(areaPhrase)],
     tool_choice: { type: "tool", name: "judge_theme_relevance" },
     messages: [
       {
         role: "user",
-        content: `Here are ${themes.length} existing themes for EyeSpy, a tool that finds Durbanville-area (Cape Town, South Africa) local business/service demand gaps:\n\n${themeList}\n\nJudge each one's relevance per the tool's instructions. Most themes should be genuinely local (e.g. "reliable plumber in Durbanville") — only flag ones that are clearly general news/politics/national topics with no specific local-demand angle.`,
+        content: `Here are ${themes.length} existing themes for EyeSpy, a tool that finds local business/service demand gaps in ${areaPhrase}:\n\n${themeList}\n\nJudge each one's relevance per the tool's instructions. Most themes should be genuinely local (e.g. "reliable plumber in Durbanville") — only flag ones that are clearly general news/politics/national topics with no specific local-demand angle.`,
       },
     ],
   });
@@ -113,6 +121,8 @@ export async function proposeIrrelevantThemes(
 
   if (themes.length === 0) return { proposals: [], errors: [] };
 
+  const areaPhrase = await buildAreaPhrase(regionId);
+
   const signalCounts = await prisma.signal.groupBy({
     by: ["themeId"],
     where: { themeId: { in: themes.map((t) => t.id) } },
@@ -128,7 +138,7 @@ export async function proposeIrrelevantThemes(
   const results = await Promise.all(
     batches.map(async (batch, idx) => {
       try {
-        return { proposals: await judgeBatch(batch, countByThemeId), error: null };
+        return { proposals: await judgeBatch(batch, countByThemeId, areaPhrase), error: null };
       } catch (err) {
         return {
           proposals: [] as IrrelevantThemeProposal[],

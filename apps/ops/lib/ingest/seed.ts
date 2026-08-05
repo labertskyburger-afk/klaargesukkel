@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const REGION_NAME = "Durbanville, Cape Town";
+const REGION_NAME = "Northern Suburbs, Cape Town";
 
 // A region isn't just its umbrella name — real data (service requests,
 // forum posts) usually names the specific sub-suburb, not "Durbanville"
@@ -174,11 +174,21 @@ function buildArcGisWhereClause(suburbNames: string[]): string {
 // manual SQL update — everything else (new sources, active flags) stays
 // create-once as before.
 export async function ensureSeed() {
-  let region = await prisma.region.findFirst({ where: { name: REGION_NAME } });
+  // Looked up by creation order, not name — multi-region isn't supported
+  // yet (this is the only region), same lookup the dashboard pages already
+  // use. Matching by exact name would make a REGION_NAME rename (e.g.
+  // "Durbanville, Cape Town" -> "Northern Suburbs, Cape Town" once
+  // Bellville/Brackenfell were added, 2026-08-05) silently create a second,
+  // disconnected region instead of renaming the existing one — every
+  // existing theme/source/signal's regionId would still point at the old
+  // row. Self-heals the name below instead.
+  let region = await prisma.region.findFirst({ orderBy: { createdAt: "asc" } });
   if (!region) {
     region = await prisma.region.create({
       data: { name: REGION_NAME, keywords: [] },
     });
+  } else if (region.name !== REGION_NAME) {
+    region = await prisma.region.update({ where: { id: region.id }, data: { name: REGION_NAME } });
   }
 
   const suburbs = await ensureAreas(region.id);
@@ -395,6 +405,43 @@ export async function ensureSeed() {
 // classifier's relevance-gate prompt).
 export async function getOfficialSuburbs(regionId: string) {
   return prisma.area.findMany({ where: { regionId, unitType: "official_planning_suburb" } });
+}
+
+// Builds a human-readable phrase describing the region's actual
+// district/local-market/suburb Area rows, e.g. "the Northern Suburbs area
+// of Cape Town, South Africa — covering: Durbanville local market
+// (Durbanville, Durbanville Hills, ...); Bellville local market (Bellville,
+// Welgemoed, ...); Brackenfell local market (Brackenfell, Protea
+// Village, ...)" — organized by market rather than one flat suburb list, so
+// an LLM prompt built from it can reason about which suburbs actually
+// belong together. Shared by classify.ts's relevance gate and
+// purgeThemes.ts's relevance judgment — both need the same "is this
+// actually about our tracked area" framing, and previously drifted out of
+// sync (purgeThemes.ts stayed hardcoded to "Durbanville-area" after
+// classify.ts became area-driven, then again after Bellville/Brackenfell
+// were added). Never a hardcoded place-name string, so this stays correct
+// as markets/suburbs are added. Falls back to the region name alone if no
+// local markets are seeded yet (shouldn't happen post-ensureSeed, but
+// callers may run independently of the seed step).
+export async function buildAreaPhrase(regionId: string): Promise<string> {
+  const region = await prisma.region.findUnique({ where: { id: regionId } });
+  const localMarkets = await prisma.area.findMany({
+    where: { regionId, unitType: "local_market" },
+    include: { childAreas: { where: { unitType: "official_planning_suburb" } } },
+  });
+
+  if (localMarkets.length === 0) {
+    return `${region?.name ?? "the region"} (Cape Town, South Africa)`;
+  }
+
+  const district = await prisma.area.findFirst({ where: { regionId, unitType: "district" } });
+  const districtName = district?.name ?? region?.name.split(",")[0] ?? "the region";
+
+  const marketDescriptions = localMarkets
+    .map((m) => `${m.name} (${m.childAreas.map((s) => s.name).join(", ")})`)
+    .join("; ");
+
+  return `the ${districtName} area of Cape Town, South Africa — covering: ${marketDescriptions}`;
 }
 
 // Signals from the weekly manual-capture upload attach to this Source row.
