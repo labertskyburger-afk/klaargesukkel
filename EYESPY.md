@@ -31,6 +31,17 @@ for years, not a one-off scrape.
 knowledge, large enough to have real signal volume. Build region as configuration, not a
 hardcoded value — this should extend to other areas (Namaqualand, nationwide) once proven.
 
+**Scope every region by its actual sub-suburbs/postal codes, not just the umbrella name —
+added 2026-08-03 after finding the ArcGIS source was silently missing real Durbanville records
+(e.g. "STELLENRYK, EVERSDAL", "Stellenberg Village") that never mention "Durbanville" by name
+at all.** Real local data — service requests, forum posts, review text — usually names the
+specific sub-suburb someone actually lives in, not the umbrella area. Durbanville's confirmed
+sub-suburbs so far: Stellenryk, Stellenberg, Eversdal (Albert's own local knowledge — extend
+this list if more turn up). Whenever a new region gets built, research its actual sub-suburbs/
+postal codes up front and OR them across every source's geo-scoping (ArcGIS whereClause,
+search query alternation, Reddit query, Region.keywords) — not just the one headline place
+name. See `apps/ops/lib/ingest/seed.ts`'s `DURBANVILLE_AREAS` for the current pattern.
+
 ## Data sources (v1 — compliant only)
 
 **Reconciled 2026-08-02** — Albert flagged low confidence in the sources actually live so far
