@@ -19,8 +19,45 @@ model Region {
   themes   Theme[]
   signals  Signal[]
   digests  DigestReport[]
+  areas    Area[]
 
   createdAt DateTime @default(now())
+}
+
+enum AreaUnitType {
+  official_planning_suburb
+  local_market
+}
+
+enum AreaBoundaryConfidence {
+  official
+  analytical
+  unverified
+}
+
+// A suburb or analytical grouping inside a Region — replaces the old
+// hardcoded DURBANVILLE_AREAS array in seed.ts. Official suburbs are peers,
+// not children of each other (e.g. Stellenridge/Stellenryk are NOT children
+// of Durbanville, per Census Main Place data) — parentAreaId only links an
+// official suburb up to its optional analytical local_market grouping (e.g.
+// "Durbanville local market"), never suburb-to-suburb. See EYESPY.md's
+// geographic model / the "local area research system" spec.
+model Area {
+  id                 String                 @id @default(cuid())
+  region             Region                 @relation(fields: [regionId], references: [id])
+  regionId           String
+  name               String
+  unitType           AreaUnitType
+  parentArea         Area?                  @relation("AreaMarket", fields: [parentAreaId], references: [id])
+  parentAreaId       String?
+  childAreas         Area[]                 @relation("AreaMarket")
+  aliases            String[]               @default([])
+  boundaryConfidence AreaBoundaryConfidence @default(official)
+  signals            Signal[]
+
+  createdAt DateTime @default(now())
+
+  @@index([regionId])
 }
 
 enum SourceType {
@@ -116,6 +153,11 @@ model Signal {
   themeId     String?
   group       Group?      @relation(fields: [groupId], references: [id])
   groupId     String?
+  // Which suburb this signal's text names, when determinable (e.g. ArcGIS's
+  // own Suburb field, or a name match against search/Reddit/manual-capture
+  // text) — nullable, most free-text signals won't resolve to one suburb.
+  area        Area?       @relation(fields: [areaId], references: [id])
+  areaId      String?
   rawText     String
   url         String?
   capturedVia CapturedVia
@@ -126,6 +168,7 @@ model Signal {
 
   @@index([regionId, themeId])
   @@index([sourceId])
+  @@index([areaId])
 }
 
 enum DigestGeneratedBy {

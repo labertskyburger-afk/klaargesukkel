@@ -1,47 +1,68 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { getOfficialSuburbs } from "@/lib/ingest/seed";
 
 const client = new Anthropic();
 
-const CLASSIFY_TOOL: Anthropic.Tool = {
-  name: "classify_signal",
-  description:
-    "First judge whether a signal is actually about a Durbanville-area (Cape Town, South Africa) local need — if not, mark it irrelevant and stop there. Otherwise classify it against the region's existing themes (attach or propose new) and judge whether it's demand or supply.",
-  input_schema: {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["attach", "new", "irrelevant"],
-        description:
-          "'irrelevant' = general news, national/international politics, or any topic not tied to a specific Durbanville-area local need — e.g. an article about immigration law, climate policy, or national crime statistics with no local-demand angle. This is common from the broad RSS news sources; use it whenever a signal doesn't represent someone in Durbanville needing, wanting, or struggling to find something. Otherwise 'attach' to a matching existing theme or propose a 'new' one.",
+// Built per-call from the region's actual Area rows rather than a hardcoded
+// "Durbanville-area" string, so the relevance gate stays accurate as
+// suburbs get added (or a second region gets built) — see seed.ts's
+// geographic-model comment. Falls back to the region name alone if no
+// suburbs are seeded yet (shouldn't happen post-ensureSeed, but classify
+// is called independently of the seed step).
+function buildClassifyTool(areaPhrase: string): Anthropic.Tool {
+  return {
+    name: "classify_signal",
+    description: `First judge whether a signal is actually about a local need in ${areaPhrase} — if not, mark it irrelevant and stop there. Otherwise classify it against the region's existing themes (attach or propose new) and judge whether it's demand or supply.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["attach", "new", "irrelevant"],
+          description: `'irrelevant' = general news, national/international politics, or any topic not tied to a specific local need in ${areaPhrase} — e.g. an article about immigration law, climate policy, or national crime statistics with no local-demand angle. This is common from the broad RSS news sources; use it whenever a signal doesn't represent someone in that area needing, wanting, or struggling to find something. Otherwise 'attach' to a matching existing theme or propose a 'new' one.`,
+        },
+        theme_id: {
+          type: "string",
+          description: "Required when action is 'attach' — the id of the matching existing theme.",
+        },
+        label: {
+          type: "string",
+          description: "Required when action is 'new' — a short (3-8 word) label for the theme.",
+        },
+        description: {
+          type: "string",
+          description: "Required when action is 'new' — one sentence describing the underlying need.",
+        },
+        category: {
+          type: "string",
+          description: "Required when action is 'new' — a short category tag, e.g. 'home services', 'food', 'transport'.",
+        },
+        signal_type: {
+          type: "string",
+          enum: ["demand", "supply", "unclear"],
+          description:
+            "Required when action is 'attach' or 'new' (omit when action is 'irrelevant'). 'demand' = someone asking a question, complaining, or looking for something (a real need). 'supply' = a business/listing/ad describing what it offers — including SEO landing-page copy phrased as a question ('Are you looking for a reliable plumber?') to target search queries; that is still supply, not demand, regardless of phrasing. 'unclear' if genuinely ambiguous — don't guess.",
+        },
       },
-      theme_id: {
-        type: "string",
-        description: "Required when action is 'attach' — the id of the matching existing theme.",
-      },
-      label: {
-        type: "string",
-        description: "Required when action is 'new' — a short (3-8 word) label for the theme.",
-      },
-      description: {
-        type: "string",
-        description: "Required when action is 'new' — one sentence describing the underlying need.",
-      },
-      category: {
-        type: "string",
-        description: "Required when action is 'new' — a short category tag, e.g. 'home services', 'food', 'transport'.",
-      },
-      signal_type: {
-        type: "string",
-        enum: ["demand", "supply", "unclear"],
-        description:
-          "Required when action is 'attach' or 'new' (omit when action is 'irrelevant'). 'demand' = someone asking a question, complaining, or looking for something (a real need). 'supply' = a business/listing/ad describing what it offers — including SEO landing-page copy phrased as a question ('Are you looking for a reliable plumber?') to target search queries; that is still supply, not demand, regardless of phrasing. 'unclear' if genuinely ambiguous — don't guess.",
-      },
+      required: ["action"],
     },
-    required: ["action"],
-  },
-};
+  };
+}
+
+// Builds the phrase used in the classifier's relevance-gate prompt from the
+// region's actual official suburbs, e.g. "the Durbanville local market area
+// (Durbanville, Durbanville Hills, Sonstraal Heights, Eversdal, Stellenberg,
+// Stellenridge, Stellenryk — Cape Town, South Africa)" — never a hardcoded
+// "Durbanville-area" string, so this stays correct as suburbs are added.
+async function buildAreaPhrase(regionId: string): Promise<string> {
+  const region = await prisma.region.findUnique({ where: { id: regionId } });
+  const suburbs = await getOfficialSuburbs(regionId);
+  const place = region?.name.split(",")[0] ?? "the region";
+  if (suburbs.length === 0) return `${region?.name ?? place} (Cape Town, South Africa)`;
+  const suburbList = suburbs.map((s) => s.name).join(", ");
+  return `the ${place} local market area (${suburbList} — Cape Town, South Africa)`;
+}
 
 // Classify a new signal against the region's existing theme pool — attach it
 // to a matching theme, or create a new one. Themes persist and accumulate
@@ -79,15 +100,17 @@ export async function classifySignal(
           .map((t) => `- ${t.id}: ${t.label} (${t.category ?? "uncategorized"}) — ${t.description ?? ""}`)
           .join("\n");
 
+  const areaPhrase = await buildAreaPhrase(regionId);
+
   const response = await client.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 512,
-    tools: [CLASSIFY_TOOL],
+    tools: [buildClassifyTool(areaPhrase)],
     tool_choice: { type: "tool", name: "classify_signal" },
     messages: [
       {
         role: "user",
-        content: `Signal text:\n"""${rawText}"""\n\nExisting themes for this region:\n${themeList}\n\nFirst judge relevance per the tool's instructions — if this isn't about a genuine Durbanville-area local need, use action "irrelevant" and stop there. Otherwise: does it match one of the existing themes? If yes, attach it (action "attach", theme_id set). If it's genuinely new, propose a new theme (action "new", with label/description/category). Also judge signal_type when attaching or creating.`,
+        content: `Signal text:\n"""${rawText}"""\n\nExisting themes for this region:\n${themeList}\n\nFirst judge relevance per the tool's instructions — if this isn't about a genuine local need in ${areaPhrase}, use action "irrelevant" and stop there. Otherwise: does it match one of the existing themes? If yes, attach it (action "attach", theme_id set). If it's genuinely new, propose a new theme (action "new", with label/description/category). Also judge signal_type when attaching or creating.`,
       },
     ],
   });

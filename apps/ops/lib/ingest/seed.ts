@@ -7,12 +7,81 @@ const REGION_NAME = "Durbanville, Cape Town";
 // itself. Found 2026-08-03: the ArcGIS source's whereClause only matched
 // "%DURBANVILLE%", silently missing real records like "EVERSDAL",
 // "Stellenryk.", "Stellenberg Village" that never mention Durbanville by
-// name at all. Whenever a new region gets built for EyeSpy, do this
-// research up front — confirm the umbrella area's actual sub-suburbs/
-// postal codes and wire them into every source's geo-scoping (ArcGIS
-// whereClause, search query alternation, Reddit query), not just the one
-// headline place name. See EYESPY.md's "Starting region" section.
-const DURBANVILLE_AREAS = ["Durbanville", "Stellenryk", "Stellenberg", "Eversdal"];
+// name at all.
+//
+// 2026-08-05: this used to be a flat DURBANVILLE_AREAS string array read
+// directly by every source's geo-scoping. Replaced with real Area rows
+// (see schema.prisma) per the local-area-research-system geographic model —
+// official planning suburbs are peers, NOT children of "Durbanville" itself
+// (Stellenridge/Stellenryk statistically belong to Bellville's Census Main
+// Place, not Durbanville's), grouped under an optional analytical
+// "local_market" Area rather than encoded as a fake parent/child suburb
+// hierarchy. "Durbanville area"/"Northern Suburbs" are colloquial aliases
+// on that local_market row, never treated as an official boundary anywhere
+// in the pipeline. Whenever a new region gets built for EyeSpy, do this
+// suburb research up front (official planning suburb + Census Main Place
+// per suburb) and seed it the same way — see EYESPY.md's "Starting region"
+// section and the geographic-model spec.
+const LOCAL_MARKET_NAME = "Durbanville local market";
+const LOCAL_MARKET_ALIASES = ["Durbanville area", "Northern Suburbs"];
+
+// Official planning suburbs making up the Durbanville local market.
+// Durbanville / Durbanville Hills / Sonstraal Heights sit under Durbanville
+// Main Place in Census 2011; Stellenridge / Stellenryk sit under Bellville
+// Main Place — kept as peer suburbs here regardless, per the "do not invent
+// parent-child relationships from place names" rule. Eversdal and
+// Stellenberg were confirmed live via real ArcGIS/search matches on
+// 2026-08-03 and are included even though they weren't in the original
+// section-12 example list.
+const DURBANVILLE_SUBURBS = [
+  "Durbanville",
+  "Durbanville Hills",
+  "Sonstraal Heights",
+  "Eversdal",
+  "Stellenberg",
+  "Stellenridge",
+  "Stellenryk",
+];
+
+// Idempotent: creates the local_market Area and its suburb children once,
+// returns the full list of official suburb Area rows (used to build every
+// source's geo-scoping). Safe to call on every cron run.
+async function ensureAreas(regionId: string) {
+  let localMarket = await prisma.area.findFirst({
+    where: { regionId, name: LOCAL_MARKET_NAME, unitType: "local_market" },
+  });
+  if (!localMarket) {
+    localMarket = await prisma.area.create({
+      data: {
+        regionId,
+        name: LOCAL_MARKET_NAME,
+        unitType: "local_market",
+        aliases: LOCAL_MARKET_ALIASES,
+        boundaryConfidence: "analytical",
+      },
+    });
+  }
+
+  const suburbs = [];
+  for (const name of DURBANVILLE_SUBURBS) {
+    let suburb = await prisma.area.findFirst({
+      where: { regionId, name, unitType: "official_planning_suburb" },
+    });
+    if (!suburb) {
+      suburb = await prisma.area.create({
+        data: {
+          regionId,
+          name,
+          unitType: "official_planning_suburb",
+          parentAreaId: localMarket.id,
+          boundaryConfidence: "official",
+        },
+      });
+    }
+    suburbs.push(suburb);
+  }
+  return suburbs;
+}
 
 // Restricted to community/forum sites, not the open web — general geo+intent
 // queries against the whole web mostly surface local businesses' own SEO
@@ -31,36 +100,55 @@ const SITE_RESTRICTION = "(site:reddit.com OR site:facebook.com OR site:hellopet
 // of the SEO-ad noise even before the site restriction does its part.
 // Tune/expand this list later via a direct SQL update to the Source row,
 // same pattern as the ArcGIS source's config.
-// Each geo term is quoted and OR'd across every Durbanville-area sub-suburb
-// — found 2026-08-03 that (a) an unquoted geo term is treated as a
-// relevance nice-to-have, not a requirement, so a well-matching Reddit
+// Each geo term is quoted and OR'd across every official suburb in the
+// local market — found 2026-08-03 that (a) an unquoted geo term is treated
+// as a relevance nice-to-have, not a requirement, so a well-matching Reddit
 // post from Durham, NC ("r/bullcity ... north durham") or Johannesburg was
 // outranking on phrase-similarity alone despite never mentioning
 // Durbanville at all, and (b) "Durbanville" alone misses real local
 // content that only names a sub-suburb (e.g. "Eversdal", "Stellenryk").
-const GEO_ALTERNATION = `(${DURBANVILLE_AREAS.map((a) => `"${a}"`).join(" OR ")})`;
-const SEARCH_QUERIES = [
-  `${SITE_RESTRICTION} "can anyone recommend" plumber ${GEO_ALTERNATION}`,
-  `${SITE_RESTRICTION} "does anyone know a good" electrician ${GEO_ALTERNATION}`,
-  `${SITE_RESTRICTION} "can anyone recommend" handyman ${GEO_ALTERNATION}`,
-  `${SITE_RESTRICTION} "does anyone know" childcare ${GEO_ALTERNATION}`,
-  `${SITE_RESTRICTION} "does anyone offer" dog walking ${GEO_ALTERNATION}`,
-];
+function buildGeoAlternation(suburbNames: string[]): string {
+  return `(${suburbNames.map((a) => `"${a}"`).join(" OR ")})`;
+}
 
-// Idempotent: safe to call on every cron run. Creates the starting region and
-// sources once, does nothing on subsequent runs. New sources (e.g. once the
-// ArcGIS Service Requests URL is confirmed) get added here and picked up
-// automatically — flip `active` on once a source's config is real.
+function buildSearchQueries(suburbNames: string[]): string[] {
+  const geo = buildGeoAlternation(suburbNames);
+  return [
+    `${SITE_RESTRICTION} "can anyone recommend" plumber ${geo}`,
+    `${SITE_RESTRICTION} "does anyone know a good" electrician ${geo}`,
+    `${SITE_RESTRICTION} "can anyone recommend" handyman ${geo}`,
+    `${SITE_RESTRICTION} "does anyone know" childcare ${geo}`,
+    `${SITE_RESTRICTION} "does anyone offer" dog walking ${geo}`,
+  ];
+}
+
+function buildArcGisWhereClause(suburbNames: string[]): string {
+  return suburbNames.map((a) => `UPPER(Suburb) LIKE '%${a.toUpperCase()}%'`).join(" OR ");
+}
+
+// Idempotent: safe to call on every cron run. Creates the starting region,
+// its Area rows and sources once; on later runs it refreshes the suburb-
+// derived config (whereClause/queries/keywords) on the geo-scoped sources
+// so adding a suburb to DURBANVILLE_SUBURBS actually reaches production
+// without a manual SQL update — everything else (new sources, active
+// flags) stays create-once as before.
 export async function ensureSeed() {
   let region = await prisma.region.findFirst({ where: { name: REGION_NAME } });
   if (!region) {
     region = await prisma.region.create({
-      data: {
-        name: REGION_NAME,
-        keywords: [...DURBANVILLE_AREAS, "Cape Town", "Western Cape"],
-      },
+      data: { name: REGION_NAME, keywords: [] },
     });
   }
+
+  const suburbs = await ensureAreas(region.id);
+  const suburbNames = suburbs.map((s) => s.name);
+
+  await prisma.region.update({
+    where: { id: region.id },
+    data: {
+      keywords: [...suburbNames, ...LOCAL_MARKET_ALIASES, "Cape Town", "Western Cape"],
+    },
+  });
 
   // RSS/podcast-RSS sources — podcast feeds are just RSS with iTunes
   // extensions, and the CapeTalk feed uses standard <title>/<description>
@@ -88,6 +176,13 @@ export async function ensureSeed() {
   }
 
   const arcgisSourceName = "Cape Town Service Requests (open data)";
+  const arcgisConfig = {
+    queryUrl:
+      "https://services6.arcgis.com/nyYfO9SxHU2ChQd9/arcgis/rest/services/Service_Requests_2023_until_20_May_2026/FeatureServer/0",
+    whereClause: buildArcGisWhereClause(suburbNames),
+    textFields: ["C3_Complaint_Type", "Notification_type", "Suburb", "Ward"],
+    dateField: "Created_On_Date",
+  };
   const existingArcgis = await prisma.source.findFirst({
     where: { regionId: region.id, name: arcgisSourceName },
   });
@@ -100,21 +195,19 @@ export async function ensureSeed() {
         active: true,
         // "Service Requests 2023 until 30 July 2026" — City of Cape Town's
         // public SAP C3 Notifications feed, confirmed live 2026-08-02.
-        // Scoped to the Durbanville area via whereClause since the feed
-        // covers all of Cape Town otherwise — OR'd across every sub-suburb
-        // (not just "Durbanville" itself, see DURBANVILLE_AREAS comment).
-        config: {
-          queryUrl:
-            "https://services6.arcgis.com/nyYfO9SxHU2ChQd9/arcgis/rest/services/Service_Requests_2023_until_20_May_2026/FeatureServer/0",
-          whereClause: DURBANVILLE_AREAS.map(
-            (a) => `UPPER(Suburb) LIKE '%${a.toUpperCase()}%'`
-          ).join(" OR "),
-          textFields: ["C3_Complaint_Type", "Notification_type", "Suburb", "Ward"],
-          dateField: "Created_On_Date",
-        },
+        // Scoped to the local market via whereClause since the feed covers
+        // all of Cape Town otherwise — OR'd across every official suburb
+        // (not just "Durbanville" itself, see DURBANVILLE_SUBURBS comment).
+        config: arcgisConfig,
       },
     });
+  } else {
+    // Refresh whereClause each run so adding a suburb to DURBANVILLE_SUBURBS
+    // actually reaches the already-seeded Source row, not just new regions.
+    await prisma.source.update({ where: { id: existingArcgis.id }, data: { config: arcgisConfig } });
   }
+
+  const searchQueries = buildSearchQueries(suburbNames);
 
   const googleSearchName = "Google Search (geo+intent)";
   const existingGoogleSearch = await prisma.source.findFirst({
@@ -129,8 +222,13 @@ export async function ensureSeed() {
         // Inactive until GOOGLE_SEARCH_API_KEY/GOOGLE_SEARCH_ENGINE_ID are
         // set on the apps/ops Vercel project.
         active: false,
-        config: { provider: "google", queries: SEARCH_QUERIES },
+        config: { provider: "google", queries: searchQueries },
       },
+    });
+  } else {
+    await prisma.source.update({
+      where: { id: existingGoogleSearch.id },
+      data: { config: { provider: "google", queries: searchQueries } },
     });
   }
 
@@ -148,12 +246,18 @@ export async function ensureSeed() {
         // project. (Bing Search API was retired by Microsoft — Brave is the
         // second search provider instead.)
         active: false,
-        config: { provider: "brave", queries: SEARCH_QUERIES },
+        config: { provider: "brave", queries: searchQueries },
       },
+    });
+  } else {
+    await prisma.source.update({
+      where: { id: existingBraveSearch.id },
+      data: { config: { provider: "brave", queries: searchQueries } },
     });
   }
 
   const redditSourceName = "Reddit (r/CapeTown, r/southafrica)";
+  const redditQuery = suburbNames.map((a) => `"${a}"`).join(" OR ");
   const existingReddit = await prisma.source.findFirst({
     where: { regionId: region.id, name: redditSourceName },
   });
@@ -166,15 +270,17 @@ export async function ensureSeed() {
         // Inactive until REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET are set on
         // the apps/ops Vercel project. Per EYESPY.md, highest-priority
         // source — least filtered, people describing their own problem in
-        // their own words. Kept to an OR'd Durbanville-area query rather
-        // than pulling entire subreddit feeds, so classification isn't
-        // drowned in general Cape Town chatter.
+        // their own words. Kept to an OR'd suburb query rather than pulling
+        // entire subreddit feeds, so classification isn't drowned in
+        // general Cape Town chatter.
         active: false,
-        config: {
-          subreddits: ["CapeTown", "southafrica"],
-          query: DURBANVILLE_AREAS.map((a) => `"${a}"`).join(" OR "),
-        },
+        config: { subreddits: ["CapeTown", "southafrica"], query: redditQuery },
       },
+    });
+  } else {
+    await prisma.source.update({
+      where: { id: existingReddit.id },
+      data: { config: { subreddits: ["CapeTown", "southafrica"], query: redditQuery } },
     });
   }
 
@@ -239,6 +345,13 @@ export async function ensureSeed() {
   }
 
   return region;
+}
+
+// Read-only lookup for callers that need the current suburb list without
+// re-running the full seed (e.g. tagging a signal's areaId, or building the
+// classifier's relevance-gate prompt).
+export async function getOfficialSuburbs(regionId: string) {
+  return prisma.area.findMany({ where: { regionId, unitType: "official_planning_suburb" } });
 }
 
 // Signals from the weekly manual-capture upload attach to this Source row.

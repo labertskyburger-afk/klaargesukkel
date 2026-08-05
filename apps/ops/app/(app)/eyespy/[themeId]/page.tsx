@@ -12,7 +12,7 @@ export default async function ThemeDetailPage({
   searchParams,
 }: {
   params: { themeId: string };
-  searchParams: { source?: string; manualOnly?: string; signalType?: string };
+  searchParams: { source?: string; manualOnly?: string; signalType?: string; area?: string };
 }) {
   const theme = await prisma.theme.findUnique({ where: { id: params.themeId } });
   if (!theme) notFound();
@@ -21,11 +21,17 @@ export default async function ThemeDetailPage({
 
   const allSignals = await prisma.signal.findMany({
     where: { themeId: theme.id },
-    include: { source: true },
+    include: { source: true, area: true },
     orderBy: { timestamp: "desc" },
   });
 
   const sourceNames = Array.from(new Set(allSignals.map((s) => s.source.name))).sort();
+  // Only suburbs that actually appear among this theme's signals — most
+  // signals won't resolve to one (free text often doesn't name a specific
+  // suburb), so this list is usually a subset of all seeded Area rows.
+  const areaNames = Array.from(
+    new Set(allSignals.map((s) => s.area?.name).filter((n): n is string => !!n))
+  ).sort();
 
   // Default to demand-only — supply (business/ad content) is kept as
   // context, not mixed into the primary view, same reasoning as
@@ -41,6 +47,9 @@ export default async function ThemeDetailPage({
   }
   if (searchParams.source) {
     signals = signals.filter((s) => s.source.name === searchParams.source);
+  }
+  if (searchParams.area) {
+    signals = signals.filter((s) => s.area?.name === searchParams.area);
   }
 
   // Volume-over-time: last N weeks, demand-only to stay consistent with the
@@ -104,6 +113,7 @@ export default async function ThemeDetailPage({
           if (t !== "demand") params.set("signalType", t);
           if (searchParams.source) params.set("source", searchParams.source);
           if (searchParams.manualOnly) params.set("manualOnly", searchParams.manualOnly);
+          if (searchParams.area) params.set("area", searchParams.area);
           const qs = params.toString();
           return (
             <Link
@@ -123,19 +133,28 @@ export default async function ThemeDetailPage({
 
       {/* Source filters */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Link
-          href={`/eyespy/${theme.id}${signalTypeFilter !== "demand" ? `?signalType=${signalTypeFilter}` : ""}`}
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            !searchParams.source && !searchParams.manualOnly
-              ? "bg-ink text-sand"
-              : "bg-ink/5 text-ink/60 hover:bg-ink/10"
-          }`}
-        >
-          All sources
-        </Link>
+        {(() => {
+          const params = new URLSearchParams();
+          if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+          if (searchParams.area) params.set("area", searchParams.area);
+          const qs = params.toString();
+          return (
+            <Link
+              href={`/eyespy/${theme.id}${qs ? `?${qs}` : ""}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                !searchParams.source && !searchParams.manualOnly
+                  ? "bg-ink text-sand"
+                  : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+              }`}
+            >
+              All sources
+            </Link>
+          );
+        })()}
         {sourceNames.map((name) => {
           const params = new URLSearchParams({ source: name });
           if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+          if (searchParams.area) params.set("area", searchParams.area);
           return (
             <Link
               key={name}
@@ -150,17 +169,69 @@ export default async function ThemeDetailPage({
             </Link>
           );
         })}
-        <Link
-          href={`/eyespy/${theme.id}?manualOnly=1${signalTypeFilter !== "demand" ? `&signalType=${signalTypeFilter}` : ""}`}
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            searchParams.manualOnly === "1"
-              ? "bg-ink text-sand"
-              : "bg-ink/5 text-ink/60 hover:bg-ink/10"
-          }`}
-        >
-          Manual capture only
-        </Link>
+        {(() => {
+          const params = new URLSearchParams({ manualOnly: "1" });
+          if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+          if (searchParams.area) params.set("area", searchParams.area);
+          return (
+            <Link
+              href={`/eyespy/${theme.id}?${params.toString()}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                searchParams.manualOnly === "1"
+                  ? "bg-ink text-sand"
+                  : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+              }`}
+            >
+              Manual capture only
+            </Link>
+          );
+        })()}
       </div>
+
+      {/* Suburb/area filter — only signals whose text resolved to a
+          specific suburb show up here (see matchAreaByText); most signals
+          have no area (free text that doesn't name one) and stay visible
+          under "All areas". */}
+      {areaNames.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {(() => {
+            const params = new URLSearchParams();
+            if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+            if (searchParams.source) params.set("source", searchParams.source);
+            if (searchParams.manualOnly) params.set("manualOnly", searchParams.manualOnly);
+            const qs = params.toString();
+            return (
+              <Link
+                href={`/eyespy/${theme.id}${qs ? `?${qs}` : ""}`}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  !searchParams.area ? "bg-ink text-sand" : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+                }`}
+              >
+                All areas
+              </Link>
+            );
+          })()}
+          {areaNames.map((name) => {
+            const params = new URLSearchParams({ area: name });
+            if (signalTypeFilter !== "demand") params.set("signalType", signalTypeFilter);
+            if (searchParams.source) params.set("source", searchParams.source);
+            if (searchParams.manualOnly) params.set("manualOnly", searchParams.manualOnly);
+            return (
+              <Link
+                key={name}
+                href={`/eyespy/${theme.id}?${params.toString()}`}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  searchParams.area === name
+                    ? "bg-ink text-sand"
+                    : "bg-ink/5 text-ink/60 hover:bg-ink/10"
+                }`}
+              >
+                {name}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Example signals */}
       <section className="mt-4 flex flex-col gap-3">
@@ -169,6 +240,11 @@ export default async function ThemeDetailPage({
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm text-ink/80">{s.rawText}</p>
               <div className="flex shrink-0 gap-1">
+                {s.area && (
+                  <span className="whitespace-nowrap rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal">
+                    {s.area.name}
+                  </span>
+                )}
                 {s.signalType && s.signalType !== "demand" && (
                   <span
                     className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${

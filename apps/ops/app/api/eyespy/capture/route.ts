@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureSeed, getManualCaptureSource } from "@/lib/ingest/seed";
+import { ensureSeed, getManualCaptureSource, getOfficialSuburbs } from "@/lib/ingest/seed";
 import { extractSignalFromScreenshot } from "@/lib/ingest/extractSignal";
 import { classifySignal } from "@/lib/ingest/classify";
+import { matchAreaByText } from "@/lib/ingest/matchArea";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -46,11 +47,15 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const suburbs = await getOfficialSuburbs(region.id);
+  const area = matchAreaByText(extracted.signalText, suburbs);
+
   const signal = await prisma.signal.create({
     data: {
       regionId: region.id,
       sourceId: source.id,
       groupId: typeof groupId === "string" && groupId ? groupId : null,
+      areaId: area?.id ?? null,
       rawText: extracted.signalText,
       capturedVia: "manual_screenshot",
       timestamp: new Date(),

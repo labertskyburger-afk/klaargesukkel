@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureSeed } from "@/lib/ingest/seed";
+import { ensureSeed, getOfficialSuburbs } from "@/lib/ingest/seed";
 import { pullRss } from "@/lib/ingest/rss";
 import { pullArcGis } from "@/lib/ingest/arcgis";
 import { pullSearch } from "@/lib/ingest/search";
 import { pullReddit } from "@/lib/ingest/reddit";
 import { pullPlaces } from "@/lib/ingest/places";
 import { classifySignal } from "@/lib/ingest/classify";
+import { matchAreaByText } from "@/lib/ingest/matchArea";
 import type {
   ArcGisSourceConfig,
   NormalizedSignal,
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest) {
   }
 
   const region = await ensureSeed();
+  const suburbs = await getOfficialSuburbs(region.id);
 
   const sources = await prisma.source.findMany({
     where: { regionId: region.id, active: true },
@@ -107,10 +109,13 @@ export async function GET(req: NextRequest) {
 
           if (existing) continue;
 
+          const area = matchAreaByText(signal.rawText, suburbs);
+
           await prisma.signal.create({
             data: {
               regionId: region.id,
               sourceId: source.id,
+              areaId: area?.id ?? null,
               rawText: signal.rawText,
               url: signal.url,
               timestamp: signal.timestamp,
