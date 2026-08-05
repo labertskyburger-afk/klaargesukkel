@@ -27,6 +27,10 @@ model Region {
 enum AreaUnitType {
   official_planning_suburb
   local_market
+  // Analytical grouping of several local markets — e.g. "Northern Suburbs"
+  // containing the Durbanville/Bellville/Brackenfell local markets. Same
+  // self-relation (parentAreaId) as suburb -> local_market, one level up.
+  district
 }
 
 enum AreaBoundaryConfidence {

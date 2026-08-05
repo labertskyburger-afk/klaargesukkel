@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
-import { getOfficialSuburbs } from "@/lib/ingest/seed";
 
 const client = new Anthropic();
 
@@ -51,17 +50,35 @@ function buildClassifyTool(areaPhrase: string): Anthropic.Tool {
 }
 
 // Builds the phrase used in the classifier's relevance-gate prompt from the
-// region's actual official suburbs, e.g. "the Durbanville local market area
-// (Durbanville, Durbanville Hills, Sonstraal Heights, Eversdal, Stellenberg,
-// Stellenridge, Stellenryk — Cape Town, South Africa)" — never a hardcoded
-// "Durbanville-area" string, so this stays correct as suburbs are added.
+// region's actual district/local-market/suburb Area rows, e.g. "the
+// Northern Suburbs area of Cape Town, South Africa — covering: Durbanville
+// local market (Durbanville, Durbanville Hills, ...); Bellville local
+// market (Bellville, Welgemoed, ...); Brackenfell local market
+// (Brackenfell, Protea Village, ...)" — organized by market rather than one
+// flat suburb list, so the model can reason about which suburbs actually
+// belong together. Never a hardcoded place-name string, so this stays
+// correct as markets/suburbs are added. Falls back to the region name alone
+// if no local markets are seeded yet (shouldn't happen post-ensureSeed, but
+// classify is called independently of the seed step).
 async function buildAreaPhrase(regionId: string): Promise<string> {
   const region = await prisma.region.findUnique({ where: { id: regionId } });
-  const suburbs = await getOfficialSuburbs(regionId);
-  const place = region?.name.split(",")[0] ?? "the region";
-  if (suburbs.length === 0) return `${region?.name ?? place} (Cape Town, South Africa)`;
-  const suburbList = suburbs.map((s) => s.name).join(", ");
-  return `the ${place} local market area (${suburbList} — Cape Town, South Africa)`;
+  const localMarkets = await prisma.area.findMany({
+    where: { regionId, unitType: "local_market" },
+    include: { childAreas: { where: { unitType: "official_planning_suburb" } } },
+  });
+
+  if (localMarkets.length === 0) {
+    return `${region?.name ?? "the region"} (Cape Town, South Africa)`;
+  }
+
+  const district = await prisma.area.findFirst({ where: { regionId, unitType: "district" } });
+  const districtName = district?.name ?? region?.name.split(",")[0] ?? "the region";
+
+  const marketDescriptions = localMarkets
+    .map((m) => `${m.name} (${m.childAreas.map((s) => s.name).join(", ")})`)
+    .join("; ");
+
+  return `the ${districtName} area of Cape Town, South Africa — covering: ${marketDescriptions}`;
 }
 
 // Classify a new signal against the region's existing theme pool — attach it

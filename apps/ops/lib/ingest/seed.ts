@@ -16,69 +16,110 @@ const REGION_NAME = "Durbanville, Cape Town";
 // (Stellenridge/Stellenryk statistically belong to Bellville's Census Main
 // Place, not Durbanville's), grouped under an optional analytical
 // "local_market" Area rather than encoded as a fake parent/child suburb
-// hierarchy. "Durbanville area"/"Northern Suburbs" are colloquial aliases
-// on that local_market row, never treated as an official boundary anywhere
-// in the pipeline. Whenever a new region gets built for EyeSpy, do this
-// suburb research up front (official planning suburb + Census Main Place
-// per suburb) and seed it the same way — see EYESPY.md's "Starting region"
+// hierarchy. Whenever a new region gets built for EyeSpy, do this suburb
+// research up front (official planning suburb + Census Main Place per
+// suburb) and seed it the same way — see EYESPY.md's "Starting region"
 // section and the geographic-model spec.
-const LOCAL_MARKET_NAME = "Durbanville local market";
-const LOCAL_MARKET_ALIASES = ["Durbanville area", "Northern Suburbs"];
+//
+// 2026-08-05 (later same day): "Northern Suburbs" was sitting as a
+// colloquial alias on the Durbanville local market row, but it's a real
+// City of Cape Town planning district containing several distinct local
+// markets (Durbanville, Bellville, Brackenfell, ...), not just an
+// alternate name for Durbanville — promoted to its own "district" Area,
+// one level above local_market in the same self-relation. Bellville's and
+// Brackenfell's suburb lists are a small, high-confidence starting set
+// (headline name + well-known named sub-areas), not the ~40+ entry Census
+// sub-place breakdown — same "modest, not exhaustive" approach as
+// Durbanville's original 7, expand later if real data shows gaps. Eversdal
+// and Stellenberg/Stellenridge/Stellenryk stay under Durbanville (already
+// confirmed live) rather than also being listed under Bellville, even
+// though Census-wise some of them tie to Bellville's Main Place — a suburb
+// only ever sits in one tracked local market's list at a time.
+const DISTRICT_NAME = "Northern Suburbs";
 
-// Official planning suburbs making up the Durbanville local market.
-// Durbanville / Durbanville Hills / Sonstraal Heights sit under Durbanville
-// Main Place in Census 2011; Stellenridge / Stellenryk sit under Bellville
-// Main Place — kept as peer suburbs here regardless, per the "do not invent
-// parent-child relationships from place names" rule. Eversdal and
-// Stellenberg were confirmed live via real ArcGIS/search matches on
-// 2026-08-03 and are included even though they weren't in the original
-// section-12 example list.
-const DURBANVILLE_SUBURBS = [
-  "Durbanville",
-  "Durbanville Hills",
-  "Sonstraal Heights",
-  "Eversdal",
-  "Stellenberg",
-  "Stellenridge",
-  "Stellenryk",
+const LOCAL_MARKETS: { name: string; aliases: string[]; suburbs: string[] }[] = [
+  {
+    name: "Durbanville local market",
+    aliases: ["Durbanville area"],
+    suburbs: [
+      "Durbanville",
+      "Durbanville Hills",
+      "Sonstraal Heights",
+      "Eversdal",
+      "Stellenberg",
+      "Stellenridge",
+      "Stellenryk",
+    ],
+  },
+  {
+    name: "Bellville local market",
+    aliases: [],
+    suburbs: ["Bellville", "Welgemoed", "Loevenstein", "Boston", "Oakdale", "Sanlamhof"],
+  },
+  {
+    name: "Brackenfell local market",
+    aliases: [],
+    suburbs: ["Brackenfell", "Protea Village", "Vredekloof", "Northpine", "Kaapsig"],
+  },
 ];
 
-// Idempotent: creates the local_market Area and its suburb children once,
-// returns the full list of official suburb Area rows (used to build every
-// source's geo-scoping). Safe to call on every cron run.
+// Idempotent: creates the district Area, its local-market children, and
+// their suburb children once; refreshes parentAreaId/aliases on existing
+// rows each run (so e.g. the pre-existing "Durbanville local market" row
+// gets reparented under the new district without a manual fix). Returns
+// the full flat list of official suburb Area rows across every local
+// market — used to build every source's geo-scoping. Safe to call on
+// every cron run.
 async function ensureAreas(regionId: string) {
-  let localMarket = await prisma.area.findFirst({
-    where: { regionId, name: LOCAL_MARKET_NAME, unitType: "local_market" },
+  let district = await prisma.area.findFirst({
+    where: { regionId, name: DISTRICT_NAME, unitType: "district" },
   });
-  if (!localMarket) {
-    localMarket = await prisma.area.create({
-      data: {
-        regionId,
-        name: LOCAL_MARKET_NAME,
-        unitType: "local_market",
-        aliases: LOCAL_MARKET_ALIASES,
-        boundaryConfidence: "analytical",
-      },
+  if (!district) {
+    district = await prisma.area.create({
+      data: { regionId, name: DISTRICT_NAME, unitType: "district", boundaryConfidence: "analytical" },
     });
   }
 
   const suburbs = [];
-  for (const name of DURBANVILLE_SUBURBS) {
-    let suburb = await prisma.area.findFirst({
-      where: { regionId, name, unitType: "official_planning_suburb" },
+  for (const market of LOCAL_MARKETS) {
+    let localMarket = await prisma.area.findFirst({
+      where: { regionId, name: market.name, unitType: "local_market" },
     });
-    if (!suburb) {
-      suburb = await prisma.area.create({
+    if (!localMarket) {
+      localMarket = await prisma.area.create({
         data: {
           regionId,
-          name,
-          unitType: "official_planning_suburb",
-          parentAreaId: localMarket.id,
-          boundaryConfidence: "official",
+          name: market.name,
+          unitType: "local_market",
+          parentAreaId: district.id,
+          aliases: market.aliases,
+          boundaryConfidence: "analytical",
         },
       });
+    } else if (localMarket.parentAreaId !== district.id) {
+      localMarket = await prisma.area.update({
+        where: { id: localMarket.id },
+        data: { parentAreaId: district.id, aliases: market.aliases },
+      });
     }
-    suburbs.push(suburb);
+
+    for (const name of market.suburbs) {
+      let suburb = await prisma.area.findFirst({
+        where: { regionId, name, unitType: "official_planning_suburb" },
+      });
+      if (!suburb) {
+        suburb = await prisma.area.create({
+          data: {
+            regionId,
+            name,
+            unitType: "official_planning_suburb",
+            parentAreaId: localMarket.id,
+            boundaryConfidence: "official",
+          },
+        });
+      }
+      suburbs.push(suburb);
+    }
   }
   return suburbs;
 }
@@ -129,9 +170,9 @@ function buildArcGisWhereClause(suburbNames: string[]): string {
 // Idempotent: safe to call on every cron run. Creates the starting region,
 // its Area rows and sources once; on later runs it refreshes the suburb-
 // derived config (whereClause/queries/keywords) on the geo-scoped sources
-// so adding a suburb to DURBANVILLE_SUBURBS actually reaches production
-// without a manual SQL update — everything else (new sources, active
-// flags) stays create-once as before.
+// so adding a suburb to LOCAL_MARKETS actually reaches production without a
+// manual SQL update — everything else (new sources, active flags) stays
+// create-once as before.
 export async function ensureSeed() {
   let region = await prisma.region.findFirst({ where: { name: REGION_NAME } });
   if (!region) {
@@ -142,11 +183,12 @@ export async function ensureSeed() {
 
   const suburbs = await ensureAreas(region.id);
   const suburbNames = suburbs.map((s) => s.name);
+  const marketAliases = LOCAL_MARKETS.flatMap((m) => m.aliases);
 
   await prisma.region.update({
     where: { id: region.id },
     data: {
-      keywords: [...suburbNames, ...LOCAL_MARKET_ALIASES, "Cape Town", "Western Cape"],
+      keywords: [...suburbNames, ...marketAliases, DISTRICT_NAME, "Cape Town", "Western Cape"],
     },
   });
 
@@ -195,14 +237,15 @@ export async function ensureSeed() {
         active: true,
         // "Service Requests 2023 until 30 July 2026" — City of Cape Town's
         // public SAP C3 Notifications feed, confirmed live 2026-08-02.
-        // Scoped to the local market via whereClause since the feed covers
-        // all of Cape Town otherwise — OR'd across every official suburb
-        // (not just "Durbanville" itself, see DURBANVILLE_SUBURBS comment).
+        // Scoped to the district via whereClause since the feed covers all
+        // of Cape Town otherwise — OR'd across every official suburb in
+        // every local market (not just "Durbanville" itself, see
+        // LOCAL_MARKETS comment).
         config: arcgisConfig,
       },
     });
   } else {
-    // Refresh whereClause each run so adding a suburb to DURBANVILLE_SUBURBS
+    // Refresh whereClause each run so adding a suburb to LOCAL_MARKETS
     // actually reaches the already-seeded Source row, not just new regions.
     await prisma.source.update({ where: { id: existingArcgis.id }, data: { config: arcgisConfig } });
   }
