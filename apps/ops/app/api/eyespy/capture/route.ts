@@ -47,14 +47,38 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // The group/page name is read directly off each screenshot (usually
+  // visible in Facebook's own header), so a whole folder of screenshots
+  // from different groups can be uploaded in one batch without picking a
+  // group per file — this auto-tags (or auto-registers, if it's a group
+  // not seen before) instead. The form's group dropdown is only a fallback
+  // for screenshots cropped tight enough that the group name isn't visible.
+  const manualGroupId = typeof groupId === "string" && groupId ? groupId : null;
+  let resolvedGroupId = manualGroupId;
+  let groupLabel: string | null = null;
+
+  if (extracted.groupName) {
+    let group = await prisma.group.findFirst({
+      where: { regionId: region.id, label: { equals: extracted.groupName, mode: "insensitive" } },
+    });
+    if (!group) {
+      group = await prisma.group.create({ data: { regionId: region.id, label: extracted.groupName } });
+    }
+    resolvedGroupId = group.id;
+    groupLabel = group.label;
+  }
+
   const suburbs = await getOfficialSuburbs(region.id);
-  const area = matchAreaByText(extracted.signalText, suburbs);
+  // Group name folded in — a post's own text might just say "does anyone
+  // know a plumber" with no suburb named, but a group called "Bellville
+  // Chat" situates it geographically on its own.
+  const area = matchAreaByText(`${groupLabel ?? ""} ${extracted.signalText}`, suburbs);
 
   const signal = await prisma.signal.create({
     data: {
       regionId: region.id,
       sourceId: source.id,
-      groupId: typeof groupId === "string" && groupId ? groupId : null,
+      groupId: resolvedGroupId,
       areaId: area?.id ?? null,
       rawText: extracted.signalText,
       capturedVia: "manual_screenshot",
@@ -65,5 +89,12 @@ export async function POST(req: NextRequest) {
   const { themeId, signalType } = await classifySignal(region.id, extracted.signalText);
   await prisma.signal.update({ where: { id: signal.id }, data: { themeId, signalType } });
 
-  return NextResponse.json({ stored: true, signalText: extracted.signalText, themeId, signalType });
+  return NextResponse.json({
+    stored: true,
+    signalText: extracted.signalText,
+    group: groupLabel,
+    area: area?.name ?? null,
+    themeId,
+    signalType,
+  });
 }

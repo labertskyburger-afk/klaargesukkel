@@ -18,6 +18,11 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         type: "string",
         description: "A short category tag, e.g. 'home services', 'food', 'transport'.",
       },
+      group_name: {
+        type: "string",
+        description:
+          "The exact name of the Facebook Group or Page this screenshot is from, as shown in the screenshot itself (usually at the top, e.g. next to the group's icon/cover photo) — e.g. 'Durbanville Mammas', 'Bellville Community Watch'. Omit if it isn't visible in this screenshot (e.g. cropped tightly to just the post).",
+      },
       relevant: {
         type: "boolean",
         description:
@@ -31,6 +36,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
 export type ExtractedSignal = {
   signalText: string;
   category: string | null;
+  groupName: string | null;
   relevant: boolean;
 };
 
@@ -56,7 +62,7 @@ export async function extractSignalFromScreenshot(
           },
           {
             type: "text",
-            text: "This is a screenshot from a Facebook group. Extract the underlying signal per the tool's instructions. Do not carry through the poster's name, profile photo, or other identifying details — only the substance of what they're asking, complaining about, or looking for.",
+            text: "This is a screenshot from a Facebook group. Extract the underlying signal per the tool's instructions. Do not carry through the poster's name, profile photo, or other identifying details — only the substance of what they're asking, complaining about, or looking for. Also read off the group/page name if it's visible anywhere in the screenshot (e.g. in a header, breadcrumb, or cover photo caption) — this is used to auto-tag which tracked group the screenshot came from, so read it exactly as written.",
           },
         ],
       },
@@ -71,12 +77,14 @@ export async function extractSignalFromScreenshot(
   const input = toolUse.input as {
     signal_text: string;
     category?: string;
+    group_name?: string;
     relevant: boolean;
   };
 
   return {
     signalText: input.signal_text,
     category: input.category ?? null,
+    groupName: input.group_name?.trim() || null,
     relevant: input.relevant,
   };
 }

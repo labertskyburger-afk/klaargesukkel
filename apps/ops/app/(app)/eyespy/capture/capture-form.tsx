@@ -7,6 +7,8 @@ type Group = { id: string; label: string };
 type Result = {
   stored: boolean;
   signalText?: string;
+  group?: string | null;
+  area?: string | null;
   reason?: string;
   error?: string;
 };
@@ -74,8 +76,13 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
         {groups.length > 0 && (
           <>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-ink/50">
-              Which group is this from?
+              Fallback group (optional)
             </label>
+            <p className="mt-0.5 text-xs text-ink/40">
+              Each screenshot's group is read automatically from the group name visible in the
+              image itself — mixed-group batches are fine. Only used if a screenshot is cropped
+              too tight for that to be readable.
+            </p>
             <select
               value={groupId}
               onChange={(e) => setGroupId(e.target.value)}
@@ -116,7 +123,17 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
               }`}
             >
               {r.error && <>Error: {r.error}</>}
-              {!r.error && r.stored && <>Captured: &ldquo;{r.signalText}&rdquo;</>}
+              {!r.error && r.stored && (
+                <>
+                  Captured: &ldquo;{r.signalText}&rdquo;
+                  {(r.group || r.area) && (
+                    <span className="text-ink/40">
+                      {" — "}
+                      {[r.group, r.area].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </>
+              )}
               {!r.error && !r.stored && <>Skipped: {r.reason}</>}
             </div>
           ))}
