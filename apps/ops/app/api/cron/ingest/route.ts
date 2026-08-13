@@ -6,7 +6,7 @@ import { pullArcGis } from "@/lib/ingest/arcgis";
 import { pullSearch } from "@/lib/ingest/search";
 import { pullReddit } from "@/lib/ingest/reddit";
 import { pullPlaces } from "@/lib/ingest/places";
-import { classifySignal } from "@/lib/ingest/classify";
+import { classifySignal, classifySignalNature } from "@/lib/ingest/classify";
 import { matchAreaByText } from "@/lib/ingest/matchArea";
 import type {
   ArcGisSourceConfig,
@@ -42,7 +42,7 @@ async function classifyInBatches(
           const result = await classifySignal(regionId, signal.rawText);
           await prisma.signal.update({
             where: { id: signal.id },
-            data: { themeId: result.themeId, signalType: result.signalType },
+            data: { themeId: result.themeId, signalType: result.signalType, nature: result.nature },
           });
           classified++;
         } catch (err) {
@@ -52,6 +52,33 @@ async function classifyInBatches(
     );
   }
   return classified;
+}
+
+// Backfill for signals classified before `nature` existed (see
+// schema.prisma's SignalNature comment) — only demand signals matter here,
+// since gapScore.ts only reads nature off demand signals. Same capped,
+// oldest-first, safe-to-re-run pattern as the classification phase above,
+// just a lighter/cheaper judgment (classifySignalNature doesn't touch theme
+// attachment or signal_type).
+const NATURE_BACKFILL_CAP_PER_RUN = 40;
+
+async function backfillNatureInBatches(signals: { id: string; rawText: string }[]): Promise<number> {
+  let backfilled = 0;
+  for (let i = 0; i < signals.length; i += CLASSIFY_CONCURRENCY) {
+    const batch = signals.slice(i, i + CLASSIFY_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (signal) => {
+        try {
+          const nature = await classifySignalNature(signal.rawText);
+          await prisma.signal.update({ where: { id: signal.id }, data: { nature } });
+          backfilled++;
+        } catch (err) {
+          console.error(`Nature backfill failed for signal ${signal.id}:`, err);
+        }
+      })
+    );
+  }
+  return backfilled;
 }
 
 async function pullForSource(source: {
@@ -156,9 +183,24 @@ export async function GET(req: NextRequest) {
     where: { regionId: region.id, ...needsClassification },
   });
 
+  // Phase 3: backfill `nature` for already-classified demand signals that
+  // predate the field (signalType "demand", nature still null).
+  const needsNature = { signalType: "demand" as const, nature: null };
+  const missingNature = await prisma.signal.findMany({
+    where: { regionId: region.id, ...needsNature },
+    orderBy: { createdAt: "asc" },
+    take: NATURE_BACKFILL_CAP_PER_RUN,
+    select: { id: true, rawText: true },
+  });
+  const natureBackfilled = await backfillNatureInBatches(missingNature);
+  const remainingMissingNature = await prisma.signal.count({
+    where: { regionId: region.id, ...needsNature },
+  });
+
   return NextResponse.json({
     region: region.name,
     sources: results,
     classification: { classifiedThisRun: classified, stillUnclassified: remainingUnclassified },
+    natureBackfill: { backfilledThisRun: natureBackfilled, stillMissing: remainingMissingNature },
   });
 }

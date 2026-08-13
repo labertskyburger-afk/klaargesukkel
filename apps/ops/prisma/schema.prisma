@@ -147,6 +147,24 @@ enum SignalType {
   irrelevant
 }
 
+// Added 2026-08-06: found that municipal service complaints (water outages,
+// potholes, sewage — sourced almost entirely via the ArcGIS City of Cape
+// Town Service Requests feed) were topping the "Clear gap" bucket. That's
+// gapScore.ts working exactly as designed (high demand, structurally zero
+// matching "supply" signal) but wrong for EyeSpy's actual purpose — nobody
+// commercially supplies municipal infrastructure, so "no supply" here means
+// "the City is failing at its job," not "a business opportunity." This is a
+// second, independent axis from demand/supply: civic_municipal = only the
+// municipality/government can actually address it (roads, water/electricity
+// grid, sewage, streetlights, refuse collection contracts, policing);
+// commercial = something a local business/tradesperson/provider could
+// realistically serve. Nullable for the same reason signalType was —
+// existing signals predate this field and need a backfill pass.
+enum SignalNature {
+  commercial
+  civic_municipal
+}
+
 model Signal {
   id          String      @id @default(cuid())
   region      Region      @relation(fields: [regionId], references: [id])
@@ -166,6 +184,7 @@ model Signal {
   url         String?
   capturedVia CapturedVia
   signalType  SignalType?
+  nature      SignalNature?
   timestamp   DateTime    @default(now())
 
   createdAt DateTime @default(now())

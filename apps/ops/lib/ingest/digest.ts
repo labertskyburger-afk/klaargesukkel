@@ -121,6 +121,7 @@ export async function generateDigest(regionId: string, generatedBy: "scheduled" 
     .filter((s) => s.bucket === "watch")
     .sort((a, b) => b.demandTotalCount - a.demandTotalCount);
   const dormantCount = scores.filter((s) => s.bucket === "dormant").length;
+  const civicCount = scores.filter((s) => s.bucket === "civic_municipal").length;
 
   const clearGapInputs: ThemeInput[] = await Promise.all(
     clearGapScores.map(async (score) => {
@@ -250,7 +251,7 @@ export async function generateDigest(regionId: string, generatedBy: "scheduled" 
   ];
 
   const watchExcludedCount = watchScores.length - Math.min(watchScores.length, TOP_WATCH);
-  const excludedSummary = `${dormantCount} dormant theme${dormantCount === 1 ? "" : "s"} excluded from scoring, ${watchExcludedCount} additional low-confidence theme${watchExcludedCount === 1 ? "" : "s"} below the watch list shown here (see the Sources and themes dashboard for the full picture).`;
+  const excludedSummary = `${dormantCount} dormant theme${dormantCount === 1 ? "" : "s"} excluded from scoring, ${civicCount} civic/municipal report${civicCount === 1 ? "" : "s"} excluded as not a business opportunity, ${watchExcludedCount} additional low-confidence theme${watchExcludedCount === 1 ? "" : "s"} below the watch list shown here (see the Sources and themes dashboard for the full picture).`;
 
   return prisma.digestReport.create({
     data: {

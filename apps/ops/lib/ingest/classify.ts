@@ -44,10 +44,53 @@ function buildClassifyTool(areaPhrase: string): Anthropic.Tool {
           description:
             "Required when action is 'attach' or 'new' (omit when action is 'irrelevant'). 'demand' = someone asking a question, complaining, or looking for something (a real need). 'supply' = a business/listing/ad describing what it offers — including SEO landing-page copy phrased as a question ('Are you looking for a reliable plumber?') to target search queries; that is still supply, not demand, regardless of phrasing. 'unclear' if genuinely ambiguous — don't guess.",
         },
+        nature: {
+          type: "string",
+          enum: ["commercial", "civic_municipal"],
+          description:
+            "Required when action is 'attach' or 'new' (omit when action is 'irrelevant'). 'civic_municipal' = only the municipality or government could actually address this — potholes, water/electricity outages, sewage, streetlights, refuse collection service failures, policing, other city-service complaints. 'commercial' = everything else: something a local business, tradesperson, or service provider could realistically be hired to do. A municipal service complaint is still real 'demand' from the person's point of view, but it is never a business opportunity — don't let the wording ('need', 'looking for') make a civic complaint look commercial.",
+        },
       },
       required: ["action"],
     },
   };
+}
+
+const NATURE_TOOL: Anthropic.Tool = {
+  name: "judge_signal_nature",
+  description:
+    "Judge whether a signal describes something a local business/tradesperson could be hired to address (commercial), or something only the municipality/government is responsible for (civic_municipal) — potholes, water/electricity outages, sewage, streetlights, refuse collection, policing, other city-service complaints. A municipal complaint is still real demand from the person's point of view, but it's never a business opportunity, however it's worded.",
+  input_schema: {
+    type: "object",
+    properties: {
+      nature: { type: "string", enum: ["commercial", "civic_municipal"] },
+    },
+    required: ["nature"],
+  },
+};
+
+// Lightweight backfill for signals classified before the nature field
+// existed — doesn't touch theme attachment or signal_type, just adds the
+// one missing judgment. See seed.ts's ensureSeed comment pattern: cheap,
+// capped, oldest-first, safe to re-run.
+export async function classifySignalNature(
+  rawText: string
+): Promise<"commercial" | "civic_municipal"> {
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 128,
+    tools: [NATURE_TOOL],
+    tool_choice: { type: "tool", name: "judge_signal_nature" },
+    messages: [{ role: "user", content: `Signal text:\n"""${rawText}"""` }],
+  });
+
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUse) throw new Error("classifySignalNature: model did not return a tool call");
+
+  const input = toolUse.input as { nature: "commercial" | "civic_municipal" };
+  return input.nature;
 }
 
 // Classify a new signal against the region's existing theme pool — attach it
@@ -57,6 +100,7 @@ function buildClassifyTool(areaPhrase: string): Anthropic.Tool {
 export type ClassifyResult = {
   themeId: string | null;
   signalType: "demand" | "supply" | "unclear" | "irrelevant";
+  nature: "commercial" | "civic_municipal" | null;
 };
 
 export async function classifySignal(
@@ -113,13 +157,15 @@ export async function classifySignal(
     description?: string;
     category?: string;
     signal_type?: "demand" | "supply" | "unclear";
+    nature?: "commercial" | "civic_municipal";
   };
 
   if (input.action === "irrelevant") {
-    return { themeId: null, signalType: "irrelevant" };
+    return { themeId: null, signalType: "irrelevant", nature: null };
   }
 
   const signalType = input.signal_type ?? "unclear";
+  const nature = input.nature ?? "commercial";
 
   if (input.action === "attach" && input.theme_id) {
     const matched = existingThemes.find((t) => t.id === input.theme_id);
@@ -128,7 +174,7 @@ export async function classifySignal(
         where: { id: matched.id },
         data: { lastSeenAt: new Date() },
       });
-      return { themeId: matched.id, signalType };
+      return { themeId: matched.id, signalType, nature };
     }
     // Model hallucinated a theme_id — fall through to creating a new theme
     // rather than silently dropping the signal.
@@ -142,5 +188,5 @@ export async function classifySignal(
       category: input.category,
     },
   });
-  return { themeId: created.id, signalType };
+  return { themeId: created.id, signalType, nature };
 }

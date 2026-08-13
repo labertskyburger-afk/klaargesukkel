@@ -24,6 +24,7 @@ const bucketLabel: Record<Bucket, string> = {
   rising_crowded: "Rising, crowded",
   watch: "Watch",
   dormant: "Dormant",
+  civic_municipal: "Civic/municipal",
 };
 
 const bucketStyle: Record<Bucket, string> = {
@@ -31,16 +32,21 @@ const bucketStyle: Record<Bucket, string> = {
   rising_crowded: "bg-amber/20 text-amber",
   watch: "bg-fog/20 text-fog",
   dormant: "bg-ink/5 text-ink/40",
+  civic_municipal: "bg-fog/20 text-fog",
 };
 
 // Bucket priority for the default sort — confidence-gated: a low-confidence
 // Watch theme can never outrank a confident Clear gap or Rising theme
 // regardless of raw gap_score, per EYESPY.md's Processing step 5.
+// civic_municipal never actually reaches this sort — it's filtered into its
+// own section before sorting (see commercialThemes below) — the rank value
+// here only exists to satisfy Record<Bucket, number>.
 const bucketRank: Record<Bucket, number> = {
   clear_gap: 0,
   rising_crowded: 1,
   watch: 2,
   dormant: 3,
+  civic_municipal: 4,
 };
 
 export default async function EyeSpyPage({
@@ -70,14 +76,22 @@ export default async function EyeSpyPage({
   const scores = await Promise.all(themes.map((t) => computeThemeGapScore(t.id)));
   const scoreByThemeId = new Map(scores.map((s) => [s.themeId, s]));
 
+  // Civic/municipal themes (potholes, water outages, etc.) are real local
+  // signal but never a business opportunity — gapScore.ts already excludes
+  // them from scoring; this keeps them out of the commercial ranked list
+  // entirely rather than just ranking them low, and shows them in their own
+  // section below instead.
+  const commercialThemes = themes.filter((t) => scoreByThemeId.get(t.id)!.bucket !== "civic_municipal");
+  const civicThemes = themes.filter((t) => scoreByThemeId.get(t.id)!.bucket === "civic_municipal");
+
   const categories = Array.from(
-    new Set(themes.map((t) => t.category).filter((c): c is string => !!c))
+    new Set(commercialThemes.map((t) => t.category).filter((c): c is string => !!c))
   ).sort();
 
   const activeCategory = searchParams.category;
   const filtered = activeCategory
-    ? themes.filter((t) => t.category === activeCategory)
-    : themes;
+    ? commercialThemes.filter((t) => t.category === activeCategory)
+    : commercialThemes;
 
   const sorted = filtered.slice().sort((a, b) => {
     const sa = scoreByThemeId.get(a.id)!;
@@ -90,6 +104,10 @@ export default async function EyeSpyPage({
     return sb.demandTotalCount - sa.demandTotalCount;
   });
 
+  const civicSorted = civicThemes
+    .slice()
+    .sort((a, b) => scoreByThemeId.get(b.id)!.demandTotalCount - scoreByThemeId.get(a.id)!.demandTotalCount);
+
   const clearGapCount = scores.filter((s) => s.bucket === "clear_gap").length;
 
   return (
@@ -98,8 +116,14 @@ export default async function EyeSpyPage({
         <div>
           <h1 className="text-3xl font-bold text-ink">EyeSpy</h1>
           <p className="mt-2 text-ink/60">
-            {region.name} · {themes.length} theme{themes.length === 1 ? "" : "s"} tracked ·{" "}
+            {region.name} · {commercialThemes.length} theme{commercialThemes.length === 1 ? "" : "s"} tracked ·{" "}
             {clearGapCount} clear gap{clearGapCount === 1 ? "" : "s"}
+            {civicThemes.length > 0 && (
+              <>
+                {" "}
+                · {civicThemes.length} civic/municipal report{civicThemes.length === 1 ? "" : "s"}
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -220,6 +244,63 @@ export default async function EyeSpyPage({
           </tbody>
         </table>
       </div>
+
+      {civicSorted.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold text-ink">Civic &amp; municipal reports</h2>
+          <p className="mt-1 max-w-2xl text-sm text-ink/50">
+            Municipal service complaints (potholes, water/electricity outages, sewage, refuse
+            collection, etc.) — mostly sourced from the City of Cape Town's own service-request
+            data. Real, local signal, but only the municipality can act on it — kept here for
+            visibility, not mixed into the gap ranking above since it's never a business
+            opportunity.
+          </p>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-ink/10 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-ink/10 bg-ink/5 text-xs uppercase tracking-wide text-ink/50">
+                  <th className="px-4 py-3">Theme</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Trend</th>
+                  <th className="px-4 py-3">This period</th>
+                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {civicSorted.map((theme) => {
+                  const score = scoreByThemeId.get(theme.id)!;
+                  return (
+                    <tr key={theme.id} className="border-b border-ink/5 last:border-0 hover:bg-sand/50">
+                      <td className="px-4 py-3">
+                        <Link href={`/eyespy/${theme.id}`} className="font-medium text-ink hover:text-teal">
+                          {theme.label}
+                        </Link>
+                        {theme.description && (
+                          <p className="mt-0.5 max-w-md text-xs text-ink/50">{theme.description}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-ink/60">{theme.category ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${trendStyle[score.trendDirection]}`}
+                        >
+                          {trendLabel[score.trendDirection]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-ink/70">{score.demandPeriodCount}</td>
+                      <td className="px-4 py-3 text-ink/70">{score.demandTotalCount}</td>
+                      <td className="px-4 py-3 text-ink/50">
+                        {theme.lastSeenAt.toISOString().slice(0, 10)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <p className="mt-8 max-w-2xl text-xs text-ink/40">
         Default-sorted by gap score (demand volume × trend × supply ratio), confidence-gated so

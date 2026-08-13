@@ -86,8 +86,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const { themeId, signalType } = await classifySignal(region.id, extracted.signalText);
-  await prisma.signal.update({ where: { id: signal.id }, data: { themeId, signalType } });
+  const { themeId, signalType, nature } = await classifySignal(region.id, extracted.signalText);
+  await prisma.signal.update({ where: { id: signal.id }, data: { themeId, signalType, nature } });
 
   return NextResponse.json({
     stored: true,

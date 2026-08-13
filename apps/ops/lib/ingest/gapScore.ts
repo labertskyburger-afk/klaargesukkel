@@ -1,7 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { computeThemeTrend, type TrendDirection } from "./trends";
 
-export type Bucket = "clear_gap" | "rising_crowded" | "watch" | "dormant";
+// civic_municipal: added 2026-08-06 — municipal service complaints (water
+// outages, potholes, sewage — mostly sourced via ArcGIS's City of Cape Town
+// Service Requests feed) were topping "Clear gap" because gapScore's
+// supply_ratio formula rewards demand with no matching supply signal, and
+// nobody commercially supplies municipal infrastructure. That's the formula
+// working correctly but answering the wrong question for these — "no
+// supply" here means "the City is failing," not "a business opportunity."
+// A theme whose demand signals are majority civic_municipal-natured (see
+// SignalNature in schema.prisma) gets this bucket instead, with gapScore
+// forced to 0 — excluded from the commercial-opportunity ranking entirely,
+// not just ranked low, since it isn't one. Still real, useful data — kept
+// visible in a separate section of the dashboard, not deleted.
+export type Bucket = "clear_gap" | "rising_crowded" | "watch" | "dormant" | "civic_municipal";
 
 export type ThemeGapScore = {
   themeId: string;
@@ -12,7 +24,7 @@ export type ThemeGapScore = {
   supplyRatio: number; // demand / (demand + supply), 0 if neither exists
   trendDirection: TrendDirection;
   trendMultiplier: number;
-  gapScore: number; // 0 for dormant (excluded from scoring, per EYESPY.md)
+  gapScore: number; // 0 for dormant/civic_municipal (excluded from scoring)
   confidence: boolean;
   bucket: Bucket;
 };
@@ -44,10 +56,16 @@ export async function computeThemeGapScore(themeId: string): Promise<ThemeGapSco
   const [demandSignals, supplyCount] = await Promise.all([
     prisma.signal.findMany({
       where: { themeId, signalType: "demand" },
-      select: { timestamp: true },
+      select: { timestamp: true, nature: true },
     }),
     prisma.signal.count({ where: { themeId, signalType: "supply" } }),
   ]);
+
+  // Nature is nullable (pre-backfill signals) — null treated as commercial
+  // so old/not-yet-backfilled data behaves as it always has until the
+  // cron's backfill pass reaches it, rather than silently hiding themes.
+  const civicCount = demandSignals.filter((s) => s.nature === "civic_municipal").length;
+  const isCivic = demandSignals.length > 0 && civicCount > demandSignals.length - civicCount;
 
   const now = Date.now();
   const demandVolume = demandSignals.reduce((sum, s) => {
@@ -62,18 +80,24 @@ export async function computeThemeGapScore(themeId: string): Promise<ThemeGapSco
 
   const confidence = demandTotalCount >= CONFIDENCE_MIN_SIGNALS;
   const trendMultiplier = TREND_MULTIPLIER[trend.direction];
-  const gapScore =
-    trend.direction === "dormant" ? 0 : demandVolume * trendMultiplier * supplyRatio;
 
   let bucket: Bucket;
-  if (trend.direction === "dormant") {
+  let gapScore: number;
+  if (isCivic) {
+    bucket = "civic_municipal";
+    gapScore = 0;
+  } else if (trend.direction === "dormant") {
     bucket = "dormant";
+    gapScore = 0;
   } else if (!confidence) {
     bucket = "watch";
+    gapScore = demandVolume * trendMultiplier * supplyRatio;
   } else if (supplyRatio >= SUPPLY_RATIO_CLEAR_THRESHOLD) {
     bucket = "clear_gap";
+    gapScore = demandVolume * trendMultiplier * supplyRatio;
   } else {
     bucket = "rising_crowded";
+    gapScore = demandVolume * trendMultiplier * supplyRatio;
   }
 
   return {
