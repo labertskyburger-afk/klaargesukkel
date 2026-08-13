@@ -61,11 +61,19 @@ export async function computeThemeGapScore(themeId: string): Promise<ThemeGapSco
     prisma.signal.count({ where: { themeId, signalType: "supply" } }),
   ]);
 
-  // Nature is nullable (pre-backfill signals) — null treated as commercial
-  // so old/not-yet-backfilled data behaves as it always has until the
-  // cron's backfill pass reaches it, rather than silently hiding themes.
-  const civicCount = demandSignals.filter((s) => s.nature === "civic_municipal").length;
-  const isCivic = demandSignals.length > 0 && civicCount > demandSignals.length - civicCount;
+  // Nature is nullable (pre-backfill signals). Found 2026-08-13: voting
+  // civic vs. "everything else including unclassified" meant a large old
+  // theme (e.g. 39 signals) couldn't flip until the backfill — capped and
+  // shared across the whole region, not per-theme — had individually
+  // reached a MAJORITY of its specific signals, which could take dozens of
+  // cron runs. Unclassified signals are excluded from the vote entirely
+  // instead: only signals that have actually been judged get a say, so a
+  // theme flips as soon as a small, clearly-civic sample is in, not once
+  // its whole history is processed. Requires at least 2 classified votes to
+  // guard against one early stray/misclassified signal deciding it.
+  const classifiedDemand = demandSignals.filter((s) => s.nature !== null);
+  const civicCount = classifiedDemand.filter((s) => s.nature === "civic_municipal").length;
+  const isCivic = classifiedDemand.length >= 2 && civicCount > classifiedDemand.length - civicCount;
 
   const now = Date.now();
   const demandVolume = demandSignals.reduce((sum, s) => {

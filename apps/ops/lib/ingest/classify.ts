@@ -93,6 +93,32 @@ export async function classifySignalNature(
   return input.nature;
 }
 
+// Shared by the routine cron's small per-run cap and the one-off bulk
+// backfill trigger (larger cap, its own request budget) — see
+// /api/eyespy/backfill-nature. Concurrency-batched, same pattern as
+// classifyInBatches in the cron route.
+export async function backfillNatureInBatches(
+  signals: { id: string; rawText: string }[],
+  concurrency = 5
+): Promise<number> {
+  let backfilled = 0;
+  for (let i = 0; i < signals.length; i += concurrency) {
+    const batch = signals.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async (signal) => {
+        try {
+          const nature = await classifySignalNature(signal.rawText);
+          await prisma.signal.update({ where: { id: signal.id }, data: { nature } });
+          backfilled++;
+        } catch (err) {
+          console.error(`Nature backfill failed for signal ${signal.id}:`, err);
+        }
+      })
+    );
+  }
+  return backfilled;
+}
+
 // Classify a new signal against the region's existing theme pool — attach it
 // to a matching theme, or create a new one. Themes persist and accumulate
 // across periods and sources; this is what makes trend-finding possible

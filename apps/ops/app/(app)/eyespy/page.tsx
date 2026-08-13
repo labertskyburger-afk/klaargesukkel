@@ -317,7 +317,11 @@ export default async function EyeSpyPage({
         <Link href="/eyespy/purge-themes" className="text-teal hover:underline">
           purge off-topic themes
         </Link>{" "}
-        if it's full of general news rather than local demand.
+        if it's full of general news rather than local demand, or{" "}
+        <Link href="/eyespy/backfill-nature" className="text-teal hover:underline">
+          backfill civic/municipal classification
+        </Link>{" "}
+        if a theme that's clearly a municipal complaint is still showing in the ranking above.
       </p>
     </main>
   );

@@ -6,7 +6,7 @@ import { pullArcGis } from "@/lib/ingest/arcgis";
 import { pullSearch } from "@/lib/ingest/search";
 import { pullReddit } from "@/lib/ingest/reddit";
 import { pullPlaces } from "@/lib/ingest/places";
-import { classifySignal, classifySignalNature } from "@/lib/ingest/classify";
+import { classifySignal, backfillNatureInBatches } from "@/lib/ingest/classify";
 import { matchAreaByText } from "@/lib/ingest/matchArea";
 import type {
   ArcGisSourceConfig,
@@ -57,29 +57,11 @@ async function classifyInBatches(
 // Backfill for signals classified before `nature` existed (see
 // schema.prisma's SignalNature comment) — only demand signals matter here,
 // since gapScore.ts only reads nature off demand signals. Same capped,
-// oldest-first, safe-to-re-run pattern as the classification phase above,
-// just a lighter/cheaper judgment (classifySignalNature doesn't touch theme
-// attachment or signal_type).
+// oldest-first, safe-to-re-run pattern as the classification phase above.
+// Kept small here since it shares this request's 60s budget with Phases 1-2
+// — for working through a large existing backlog fast, use
+// /eyespy/backfill-nature instead, which gets its own request budget.
 const NATURE_BACKFILL_CAP_PER_RUN = 40;
-
-async function backfillNatureInBatches(signals: { id: string; rawText: string }[]): Promise<number> {
-  let backfilled = 0;
-  for (let i = 0; i < signals.length; i += CLASSIFY_CONCURRENCY) {
-    const batch = signals.slice(i, i + CLASSIFY_CONCURRENCY);
-    await Promise.all(
-      batch.map(async (signal) => {
-        try {
-          const nature = await classifySignalNature(signal.rawText);
-          await prisma.signal.update({ where: { id: signal.id }, data: { nature } });
-          backfilled++;
-        } catch (err) {
-          console.error(`Nature backfill failed for signal ${signal.id}:`, err);
-        }
-      })
-    );
-  }
-  return backfilled;
-}
 
 async function pullForSource(source: {
   id: string;
