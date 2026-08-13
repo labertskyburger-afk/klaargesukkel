@@ -21,14 +21,37 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
   const [results, setResults] = useState<Result[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Never throws — a killed/timed-out function returns a non-JSON body,
+  // which used to make res.json() throw with nothing catching it, silently
+  // killing the whole batch loop mid-run (setLoading(false) never reached,
+  // button stuck on "Extracting…" forever, no error shown). Same failure
+  // mode as the merge-themes timeout bug, fixed the same way here.
   async function uploadOne(file: File): Promise<Result> {
+    try {
+      const res = await fetch("/api/eyespy/capture", { method: "POST", body: formDataFor(file) });
+      let data: Result | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data) {
+        return {
+          stored: false,
+          error: data?.error ?? `Request failed (${res.status}) — likely a server timeout.`,
+        };
+      }
+      return data;
+    } catch (err) {
+      return { stored: false, error: err instanceof Error ? err.message : "Network error" };
+    }
+  }
+
+  function formDataFor(file: File): FormData {
     const formData = new FormData();
     formData.append("screenshot", file);
     if (groupId) formData.append("groupId", groupId);
-
-    const res = await fetch("/api/eyespy/capture", { method: "POST", body: formData });
-    const data = await res.json();
-    return res.ok ? data : { stored: false, error: data.error };
+    return formData;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -39,7 +62,8 @@ export default function CaptureForm({ groups }: { groups: Group[] }) {
 
     // Sequential, not parallel — each upload is its own vision-extraction
     // call, and running them one at a time keeps this simple and avoids
-    // slamming the API with a burst of concurrent requests.
+    // slamming the API with a burst of concurrent requests. uploadOne never
+    // throws now, so one bad file can't stall the rest of the batch.
     for (const file of files) {
       const result = await uploadOne(file);
       setResults((prev) => [result, ...prev]);

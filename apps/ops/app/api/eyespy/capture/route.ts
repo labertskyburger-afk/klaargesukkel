@@ -47,6 +47,23 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Manual captures have no stable identity to dedupe on the way automated
+  // sources do (a URL, or the source's own raw text) — the same screenshot
+  // re-uploaded produces the same de-identified extracted text, though, so
+  // that's the dedup key. Found 2026-08-13: without this, a stuck/retried
+  // batch upload (see capture-form.tsx's uploadOne fix) would silently
+  // create a second Signal for every screenshot that had already succeeded
+  // before the stall, double-counting demand.
+  const existing = await prisma.signal.findFirst({
+    where: { sourceId: source.id, rawText: extracted.signalText },
+  });
+  if (existing) {
+    return NextResponse.json({
+      stored: false,
+      reason: "Duplicate — an identical signal was already captured.",
+    });
+  }
+
   // The group/page name is read directly off each screenshot (usually
   // visible in Facebook's own header), so a whole folder of screenshots
   // from different groups can be uploaded in one batch without picking a
