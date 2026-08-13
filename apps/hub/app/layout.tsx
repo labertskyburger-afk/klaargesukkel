@@ -1,19 +1,26 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Klaargesukkel — Smart enough to keep it simple.",
+  title: "Get It Sorted | Trusted Local Services in Cape Town",
   description:
-    "Smart enough to keep it simple. Small, sharp digital solutions for everyday hassles — for people, organizations, and businesses.",
+    "Tell us what needs sorting. We connect you with suitable local service providers and follow through to confirm the problem was resolved. Free introductions with no paid leads or hidden commission.",
   metadataBase: new URL("https://klaargesukkel.com"),
   openGraph: {
-    title: "Klaargesukkel",
-    description: "Klaar met sukkel. Smart enough to keep it simple.",
+    title: "Get It Sorted",
+    description: "The right help. From the right people. Followed through.",
     url: "https://klaargesukkel.com",
-    siteName: "Klaargesukkel",
+    siteName: "Get It Sorted",
     locale: "en_ZA",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#12232E",
 };
 
 export default function RootLayout({
@@ -23,7 +30,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-sand text-ink antialiased">{children}</body>
+      <body className="bg-sand text-ink antialiased">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

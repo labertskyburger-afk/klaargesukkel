@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContactMethod {
+  phone
+  email
+  whatsapp
+}
+
+enum Urgency {
+  emergency
+  this_week
+  flexible
+}
+
+enum SubmissionStatus {
+  received
+  in_progress
+  resolved
+}
+
+// Get It Sorted's customer request form — brief section 6. referenceCode is
+// shown back to the customer immediately ("GIS-XXXXXX") so they have
+// something to quote if they follow up before hearing back.
+model ServiceRequest {
+  id            String            @id @default(cuid())
+  referenceCode String            @unique
+  summary       String
+  category      String
+  description   String
+  suburb        String
+  urgency       Urgency
+  name          String
+  contactMethod ContactMethod
+  phone         String?
+  email         String?
+  consentGiven  Boolean           @default(false)
+  status        SubmissionStatus  @default(received)
+  createdAt     DateTime          @default(now())
+
+  @@index([status])
+}
+
+// Provider application form — brief section 6. Kept as free-text fields
+// (servicesOffered/areasServed etc.) rather than a normalized schema since
+// there's no vetting workflow yet beyond "read it and follow up" — matches
+// Phase 1 scope, not the later provider-portal phase.
+model ProviderApplication {
+  id                String           @id @default(cuid())
+  referenceCode     String           @unique
+  applicantName     String
+  isBusiness        Boolean          @default(false)
+  phone             String
+  email             String
+  servicesOffered   String
+  areasServed       String
+  yearsExperience   String?
+  qualifications    String?
+  references        String?
+  availability      String?
+  hasInsurance      Boolean?
+  afterServiceNotes String?
+  consentGiven      Boolean          @default(false)
+  status            SubmissionStatus @default(received)
+  createdAt         DateTime         @default(now())
+
+  @@index([status])
+}
+
+// Business-support enquiry — brief section 6, the lightest of the three
+// forms (no consent/legal field, this isn't matching a customer to a
+// stranger doing physical work in their home).
+model BusinessSupportEnquiry {
+  id            String        @id @default(cuid())
+  referenceCode String        @unique
+  businessName  String
+  businessSize  String?
+  mainProblem   String
+  supportArea   String?
+  contactMethod ContactMethod
+  phone         String?
+  email         String?
+  createdAt     DateTime      @default(now())
+}
