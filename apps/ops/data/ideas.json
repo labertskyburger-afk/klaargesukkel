@@ -244,6 +244,60 @@
     "added": "2026-08-04"
   },
   {
+    "name": "Scale Point — Universal Operations Platform",
+    "type": "Client-delivered engine",
+    "status": "Proposal written",
+    "priority": "High",
+    "description": "FIRST REAL PAID CLIENT ENGAGEMENT. Scale Point Marketing (agency) — a governed operational control plane sitting above the tools they already use (Monday, Slack, GoHighLevel, Google Workspace, Fathom, Meta). Their problem in their own words: 'Disconnected information, inconsistent handovers and limited agency-wide visibility.' Not a dashboard — it normalises records from multiple systems into one canonical operational model, shows evidence behind every conclusion, and much later supports human-approved write-back. AI interprets and summarises; AI is not the problem being solved. Read-only MVP first, three connectors, one pilot tenant.",
+    "location": "separate repo (not yet created), client project",
+    "docs": "scalepoint-CLAUDE.md (build brief, phases + gates + architecture), scalepoint-ASSESSMENT.md (Albert-only: honest skill/hours assessment). Source docs: client's Delivery Proposal PDF + Developer Builder Playbook docx",
+    "nextSteps": [
+      {
+        "step": "QUOTE PHASE 0 ONLY — 48-90 of Albert's hours over 3-6 weeks at 15h/wk, as a fixed fee priced at consulting rates (Phase 0 is stakeholder interviews, process mapping, API feasibility and acceptance criteria — Albert's actual profession, not coding). Do NOT quote hours for Phase 1+; state in writing that they are re-estimated at the Phase 0 gate. This is already the proposal's own position (p1: 'not a fixed-price quotation'; p23: 'planning ranges until access, data samples and vendor constraints are verified') — don't get talked off it",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Fix three things in the proposal before sending: (1) replace 'Prepared by: Development Partner' with the real entity name — reads as a template placeholder; (2) qualify the '28-40 weeks' on p1 by tying elapsed time to a stated weekly capacity, since a client will remember it as a commitment; (3) state Albert's actual hours-per-week availability up front — better selling and real protection",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Hours reality check (full working in scalepoint-ASSESSMENT.md): the proposal's 1,120-1,610h to MVP assumes 'one highly capable full-time generalist engineer'; the playbook labels near-identical week counts 'learning-builder duration' — both cannot be true. Re-based on Albert's actual profile the MVP is ~2,500-5,050 hours, with the multiplier concentrated in proposal Phases 2-4 (RLS/tenant isolation, connector backbone, idempotency/DLQ/replay/reconciliation — the areas where LLM help is least reliable because failures are silent). At 15h/wk that is 3-6 years, not 28-40 weeks. The elapsed-time promise is the single biggest commercial risk in the document",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Decide at the Phase 1 gate which of three paths: (A) build it all himself and accept 18+ months substantially full-time, which stops the Klaargesukkel portfolio; (B) RECOMMENDED — deliver Phases 0-1 himself then bring in a contract engineer for Phases 2-4, keeping product ownership, architecture and the client relationship while buying the distributed-systems/security capability as a line item rather than carrying it as risk (Phase 0's fee can part-fund it); (C) deliver Phase 0 as standalone consulting and stop, which is entirely respectable and becomes obviously right if discovery reveals ugly API constraints",
+        "owner": "Albert",
+        "waitingOn": "Phase 0 completion",
+        "priority": "High"
+      },
+      {
+        "step": "Hold the line on the 50/50 resale / revenue share referenced on p18 of the proposal. Albert's own document already warns: 'Do not exchange a low initial build fee for an undefined future revenue share.' If pushed: fair build fees now, and a SEPARATE written agreement covering revenue definition, cost allocation, sales responsibility, support burden, term, territory, audit rights and termination. Also settle IP ownership of the reusable core (connector framework, canonical model, multi-tenant spine) BEFORE Phase 2 — it is substantially what Klaargesukkel would need for its own products",
+        "owner": "Albert",
+        "waitingOn": "",
+        "priority": "High"
+      },
+      {
+        "step": "Add a Scale Point row to apps/ops/data/clients.json once the engagement is signed, per the repo's own convention that every client going live anywhere gets a row",
+        "owner": "Albert or Claude Code",
+        "waitingOn": "Phase 0 signature",
+        "priority": "Medium"
+      },
+      {
+        "step": "Create the repo and start a Claude Code session with scalepoint-CLAUDE.md as its CLAUDE.md — but ONLY after Phase 0 is signed. The brief opens with a commercial-status block listing every gate; Claude Code is instructed to refuse work on unsigned phases, since ignoring a gate means unbilled work on an unagreed contract and destroys the phase-by-phase protection the proposal was written to provide",
+        "owner": "Albert to kick off, then Claude Code",
+        "waitingOn": "Phase 0 signature",
+        "priority": "High"
+      }
+    ],
+    "added": "2026-08-12"
+  },
+  {
     "name": "Order Desk",
     "type": "Owned product",
     "status": "Idea",
