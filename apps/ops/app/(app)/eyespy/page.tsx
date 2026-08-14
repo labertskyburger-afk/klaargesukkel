@@ -321,7 +321,11 @@ export default async function EyeSpyPage({
         <Link href="/eyespy/backfill-nature" className="text-teal hover:underline">
           backfill civic/municipal classification
         </Link>{" "}
-        if a theme that's clearly a municipal complaint is still showing in the ranking above.
+        if a theme that's clearly a municipal complaint is still showing in the ranking above, or{" "}
+        <Link href="/eyespy/sense-check" className="text-teal hover:underline">
+          sense-check theme signals
+        </Link>{" "}
+        for duplicate or misattached signals inside an otherwise-legitimate theme.
       </p>
     </main>
   );
