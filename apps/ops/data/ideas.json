@@ -94,13 +94,16 @@
     "docs": "EYESPY.md",
     "nextSteps": [
       {
-        "step": "Run the two cleanup tools in order, then generate the first real digest: /eyespy/merge-themes first (merges duplicate themes), then /eyespy/purge-themes (deletes off-topic news themes), then click 'Regenerate digest now' on /eyespy/digest. Order matters — a digest scored against fragmented or off-topic themes would misrepresent what's actually a gap",
-        "owner": "Albert",
+        "step": "Cap the theme list sent to classify.ts's per-signal classification call (currently uncapped, take: 2000) now that /eyespy/merge-themes exists as a periodic cleanup safety net — the uncapped list was a deliberate fix for a 2026-08-03 fragmentation bug (a 100-theme recency cap hid older themes from the classifier, causing duplicate creation), but it means every classification call's cost scales with total theme count forever, and that's now a meaningful share of EyeSpy's Claude token usage. A moderate cap (e.g. 300, ordered by lastSeenAt) converts 'permanent uncleanable fragmentation' into 'occasional need to run merge-themes' rather than eliminating the risk outright — a real tradeoff, not a free win",
+        "owner": "Albert to confirm approach, then Claude Code",
         "waitingOn": "",
-        "priority": "High",
-        "detail": [
-          "Migration apps/ops/prisma/migrations/20260803120000_add_digest_gap_score/migration.sql and apps/ops/prisma/migrations/20260803140000_add_irrelevant_signal_type/migration.sql need hand-applying via the Query tool first if not already done."
-        ]
+        "priority": "Medium"
+      },
+      {
+        "step": "Build a throwaway side-by-side comparison tool for the weekly manual-capture vision extraction: same screenshot run through claude-opus-5 (current) and a cheaper model (claude-sonnet-5 candidate) in parallel, showing both extraction results so Albert can judge real quality difference on real screenshots before deciding whether to switch off Opus. Same 'processed in memory, nothing persisted' rule as the real capture flow. Motivated by 2026-08-13 token-usage question — Opus vision is the single most expensive call in the whole EyeSpy pipeline",
+        "owner": "Claude Code",
+        "waitingOn": "",
+        "priority": "Medium"
       },
       {
         "step": "Blocked 2026-08-02: Reddit is showing Albert's account \"blocked by network security\" on reddit.com/prefs/apps — reproduced across a different browser (Edge) and a different network (phone on mobile data), so it looks like an account-level hold rather than anything fixable on our end. Ticket filed with Reddit. Parked, not urgent — everything else is live without it. lib/ingest/reddit.ts is already built and wired in (client_credentials OAuth, r/CapeTown + r/southafrica search for \"Durbanville\"), just needs REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET once the account is unblocked",
